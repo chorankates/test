@@ -1,6 +1,8 @@
 #!/usr/bin/perl -w
 # hosts_minder.pl - cron job that cleans up /etc/hosts when it's been munged
 
+# this is a change
+
 use strict;
 use warnings;
 use 5.010;
