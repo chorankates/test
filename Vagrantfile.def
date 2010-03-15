@@ -1,0 +1,18 @@
+Vagrant::Config.run do |config|
+  # All Vagrant configuration is done here. For a detailed explanation
+  # and listing of configuration options, please check the documentation
+  # online.
+
+  # Every Vagrant virtual environment requires a box to build off of.
+  config.vm.box = "base"
+
+  ## my modifications below
+
+  # directory - this is more convenient than /vagrant/, but still has 'sudo' requirements 
+  config.vm.project_directory = "~/v"
+
+  # ftp/web forwarding
+  config.vm.forward_port("web", 80, 8080)
+  config.vm.forward_port("ftp", 21, 2121)
+
+end
