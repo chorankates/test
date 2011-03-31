@@ -9,14 +9,22 @@ use HTTP::Request::Common;
 use Getopt::Long;
 use File::Spec;
 
+use lib '/home/conor/Dropbox/perl/_pm/';
+use lib 'c:/_dropbox/My Dropbox/perl/_pm/';
+use webroot;
+use ironhide;
+
+$| = 1; # makes it better when piping output
+
 # define some hashes
 my (%f, %s, %d); # %f=CLI flags, %s=settings, %d=downloaded files HoH
 my @list;
+my %list;
 
 # do some timing
 my (@lt1, @lt2);
 @lt1 = localtime;
-print "% $0 started at ", &d_nicetime(\@lt1, "time"), "\n";
+print "% $0 started at ", nicetime(\@lt1, "time"), "\n";
 
 %s = (
     verbose => 1,
@@ -35,6 +43,7 @@ $s{dest_dir} = $f{dest} if $f{dest} and -d $f{dest};
 $s{list}     = $f{list} if $f{list} and -f $f{list};
 $s{csv}      = $f{csv}  if $f{csv};
 $s{random}   = $f{random} if $f{random};
+$s{verbose}  = $f{verbose} if $f{verbose};
 
 $s{os} = "Windows" if $^O =~ /MSWin32/i;
 $s{os} = "Linux"   if $^O =~ /(linux|unix)/i;
@@ -43,8 +52,10 @@ $s{os} = "Linux"   if $^O =~ /(linux|unix)/i;
 my $tsource;
 if ($s{list}) {
     # user specified an external list of URLs in $s{list}
-    @list = d_populate($s{list});
-    my $count = $#list + 1;
+    #@list = d_populate($s{list});
+    %list = d_populate($s{list});
+    #my $count = $#list + 1;
+    my $count = (keys %list) + 1;
     $tsource = "file";
     print "> imported $count URLs from '$s{list}'\n";
 } elsif ($s{csv}) {
@@ -53,6 +64,12 @@ if ($s{list}) {
     $tsource = "command line";
     my $count = $#list + 1;
     print "> found $count URLs from '\$f{csv}'\n";
+    
+    # put the CSV into a hash
+    foreach (@list) {
+        $list{$_} = "?";
+    }
+    
     
 } else {
     print "% downloader.pl - need a list of files to download\n";
@@ -68,24 +85,63 @@ print(
     
 ) if $s{verbose};
 
+my ($success, $failure) = (0, 0);
+my @fails; # list of URLs that 404d
 
 # ok, do some work
-for (my $i = 0; $i <= $#list; $i++) {
-    my $url     = $list[$i];
+#for (my $i = 0; $i <= $#list; $i++) {
+my $i = 0;
+foreach (sort keys %list) {
+    #my $url     = $list[$i];
+    my $url     = $_;
+       $url     = substr($url, 0, length($url) - 1) if $url =~ /\W$/; # this is not workingg for some reason
+    my $md5     = $list{$_};
     my @tmp     = split /\//, $url;
     my $local   = $tmp[-1];
-    $local = int(rand(1000)) . "." . $local if $s{random}; # this isn't perfect as we could get the same random number twice, but it's good enough for now
+       $local   = int(rand(1000)) . "." . $local if $s{random}; # this isn't perfect as we could get the same random number twice, but it's good enough for now
     my $ffp     = File::Spec->catfile($s{dest_dir}, $local); # woot
-    print "downloading '$url' to '$local'...";
+    
+    my $nurl    = substr($url, -30, 30);
+    
+    print "> downloading '$url' to '$local'...\n";
     my $results = &d_downloader($url, $ffp);
     if ($results) {
-        print "\tdownload successful\n";
-    } else { print "\tdownload FAILED\n"; }
+        print "\tdownload successful..";
     
+        unless ($md5 eq "?") {
+            # ok, download successful and we have an md5
+            my $file_md5 = md5($ffp);
+            
+            if ($file_md5 eq $md5) {
+                print "\tMD5 match '$file_md5'\n";
+            } else {
+                print "\tMD5 match FAILED, downloaded: '$file_md5', expected '$md5'\n";
+		push @fails, $url;
+		$failure++;
+		$i++;
+		next; # hacky..
+            }
+        }
+        
+        $success++;
+    } else {
+        print "\tdownload FAILED\n";
+        $failure++;
+        push @fails, $url;
+    }
+    $i++;
 }
 
+print(
+    "> results:\n",
+    "\tsuccess: $success\n",
+    "\tfailure: $failure\n",
+    "\tfail urls:\n",
+    );
+if (@fails) { print "\t\t$_\n" foreach (@fails); }
+
 @lt2 = localtime;
-print "% $0 finished at ", &d_nicetime(\@lt2, "time"), " (", &d_timetaken(\@lt1, \@lt2), ")\n";
+print "% $0 finished at ", nicetime(\@lt2, "time"), " (", timetaken(\@lt1, \@lt2), ")\n";
 
 exit 0;
 
@@ -118,76 +174,39 @@ sub d_downloader {
 }
 
 sub d_populate {
-    # d_populate($text_file) - returns an array containing contents of $text_file
+    # d_populate($text_file) - returns a hash containing contents of $text_file (primary key is path, md5 is value if we have it)
     # assumes that text file is CRLF line delimited
     my $file = shift @_;
-    my @results;
+    #my @results;
+    my %h;
     
     open (FILE, '<', $file) or die "die> unable to open '$file':$!";
     while (<FILE>) {
         chomp($_);
-        next if $_ =~ /^#/; # skipping comments
-        push @results, $_;
+        
+        my $md5 = "?";
+        my $url = "?";
+        
+        if ($_ =~ /(.*)\*\*(.*)/) {
+            $md5 = $1; # md5s have static lengths, why it is first
+            $url = $2;
+
+        } else {
+            $url = $_;
+        }
+        
+        next if     $_   =~ /^#/;     # skipping comments
+        next unless $url =~ /^http/i; # make sure its an address
+        #push @results, $_;
+        $h{$url} = $md5;
     }
     close (FILE);
     
-    return @results;
+    #return @results;
+    return %h;
 }
 
 
-sub d_nicetime {
-    # n_nicetime(\@time, type) - returns time/date according to the type 
-    # types are: time, date, both
-    my $aref = shift @_; my @time = @{$aref};
-    my $type = shift @_ || "both"; # default variables ftw.
-    warn "warn>  e_nicetime: type '$type' unknown" unless ($type =~ /time|date|both/);
-
-    my $hour = $time[2]; my $minute = $time[1]; my $second = $time[0];
-    $hour    = 0 . $hour   if $hour   < 10;
-    $minute  = 0 . $minute if $minute < 10;
-    $second  = 0 . $second if $second < 10;
-
-    my $day = $time[3]; my $month = $time[4] + 1; my $year = $time[5] + 1900;
-    $day   = 0 . $day   if $day   < 10;
-    $month = 0 . $month if $month < 10;
-
-    my $time = $hour .  "." . $minute . "." . $second;
-    my $date = $month . "." . $day    . "." . $year;
-
-    my $full = $date . "-" . $time;
-
-    if ($type eq "time") { return $time; }
-    if ($type eq "date") { return $date; }
-    if ($type eq "both") { return $full; }
-}
-
-sub d_timetaken {
-    # n_timetaken(\@time1, \@time2) - returns the difference between times
-    # right now only supporting diffs measured in hours, and will break on wraparound hours
-    my ($aref1, $aref2, @time1, @time2);
-    $aref1 = shift @_;  $aref2 = shift @_;
-    @time1 = @{$aref1}; @time2 = @{$aref2};
-	
-	my ($diff_second, $diff_minute, $diff_hour);
-    # main handling
-    if ($time1[0] <= $time2[0]) {
-		$diff_second = $time2[0] - $time1[0];
-		$diff_minute = $time2[1] - $time1[1];
-	} else {
-		$diff_second = ($time2[0] + 60) - $time1[0];
-		$diff_minute = ($time2[1] - 1) - $time1[1];
-	}
-    # still need to resolve the hour wraparound, but low priority
-    $diff_hour   = $time2[2] - $time1[2];
-
-    # stickler for leading 0 if 1 < N > 10, flexing some regex muscle
-    foreach ($diff_second, $diff_minute, $diff_hour) { $_ =~ /^(\d{1})$/; if (($1) and length($1) eq 1) { $_ = 0 . $_; } }
-
-
-    my $return = $diff_hour . "h" . $diff_minute . "m" . $diff_second . "s";
-    return $return;
-
-}
 
 sub d_help {
     
