@@ -9,8 +9,6 @@ use HTTP::Request::Common;
 use Getopt::Long;
 use File::Spec;
 
-use lib '/home/conor/Dropbox/perl/_pm/';
-use lib 'c:/_dropbox/My Dropbox/perl/_pm/';
 use webroot;
 use ironhide;
 

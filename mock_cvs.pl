@@ -35,13 +35,13 @@ $| = 1; # buffering hack
     interactive => 0, # prompting that allows updating of out-of-date files
     confirm     => 1, # controls confirmation prompt
 	
-    dir_uCVS   => [ "/home/conor/Dropbox/perl/", ],    # future proofing with arrays
+    dir_uCVS   => [ "/home/you/", ],    # future proofing with arrays
     dir_ulocal => [ $ENV{HOME}, "/usr/local/apache2/cgi-bin", "/usr/lib/cgi-bin/"],
-    #dir_uskip  => [ "/home/conor/Dropbox/perl/books/", ], # skipping in all cases
+    #dir_uskip  => [ "", ], # skipping in all cases
 
-    dir_wCVS   => [ "c:\\_dropbox\\My Dropbox\\perl", ],
-    dir_wlocal => [ "c:\\test", "c:\\scratch", ],
-    #dir_wskip  => [ "c:\\_dropbox\\My Dropbox\\perl\\books", ],
+    dir_wCVS   => [ "c:\\foo", ],
+    dir_wlocal => [ "c:\\bar", "c:\\scratch", ],
+    #dir_wskip  => [ "c:\\books", ],
     
 
     glob       => "(\.pl|\.conf)\$", # only look for these files, actually an RE
@@ -250,12 +250,7 @@ sub m_populate {
 	    
 	    # substr = the current files directory chomped to the same length as
 	    # the dynamic (current) CVS directory. this will prevent us from adding files
-	    # to the local directory hash if the CVS directory is a subdir of it (i.e.: local = /home/conor/, CVS = /home/conor/Dropbox)
-	    
-	    # so,
-	    # local=/home/conor/foo.pl, CVS=/home/conor/Dropbox/, substr=/home/conor/foo.pl (local = 18, CVS = 21), this file will be added to the local hash
-	    # local=/home/conor/Dropbox/perl/_ensanity/ensanity.pl, CVS=/home/conor/Dropbox/, substr=/home/conor/Dropbox/, this file will NOT be added to the local hash	    
-
+	    # to the local directory hash if the CVS directory is a subdir of it
 	    print "\$ffp: $ffp / \$substr: $substr / \$cvs_dir: $cvs_dir \n" if $s{debug} gt 1;
     
 	    return if $substr eq $cvs_dir;
@@ -279,13 +274,6 @@ sub m_populate {
 	$f_local{$md5}{size}  = $size;
 	$f_local{$md5}{mtime} = $mtime;
 	
-	if (1 and $ffp eq "/home/conor/ensanity/ensanity.pl") { 
-	    print "> adding ensanity.pl !!!! why isn't it showing in HoH later\n"; 
-	    print "\$f_local, md5: $md5\n";
-	    print "\tname: $f_local{$md5}{name}\n";
-	    print "\tdir : $f_local{$md5}{dir}\n";
-	}
-
     }
     else                       { die "ERROR: unknown method '$method'"; }
 
