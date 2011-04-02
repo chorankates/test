@@ -67,7 +67,8 @@ find(
         return if is_skip($ffp); # check the @C::settings{skip} list
         return unless -f $ffp;   # just to make sure we don't add any directories (that happen to end in .mp3)
         
-        print "\tadding '$ffp'\n" if $C::settings{verbose} ge 2;
+        #print "\tadding '$ffp'\n" if $C::settings{verbose} ge 2;
+        print "\tadding '$file'\n" if $C::settings{verbose} ge 2;
         
         $D::mp3{$ffp} = $file;
     },
@@ -75,7 +76,7 @@ find(
 );
 
 my @lt1 = localtime;
-print "  found ", keys %D::mp3, " mp3s in ", timetaken(\@t1, \@lt1), "\n" if $C::settings{verbose} ge 1;
+print "  found ", scalar keys %D::mp3, " mp3s in ", timetaken(\@t1, \@lt1), "\n" if $C::settings{verbose} ge 1;
 
 ## look at these files
 print "> examining mp3s found..\n" if $C::settings{verbose} ge  1;
@@ -97,14 +98,19 @@ foreach (sort keys %D::mp3) {
         my @fields = @{$C::settings{fields}};
         my $field  = $_;
 
-        unless (@fields ~~ $field) {
+        unless (@fields ~~ /$field/) {
             # smartmatching ftw.. love me some 5.10
             print "\t  skipping '$field'\n" if $C::settings{verbose} ge 3;
             next;
         }
         
         my $v1 = $v1{$field} // 'unset';
+           $v1 = ($v1 eq '') ?  'unset' : $v1;
+           
         my $v2 = $v2{$field} // 'unset';
+           $v2 = ($v2 eq '') ?  'unset' : $v2;
+        
+        
         
         if ($v1 eq $v2 and $v1 ne 'unset') {
             # fields are already in sync, nothing to do
@@ -113,14 +119,14 @@ foreach (sort keys %D::mp3) {
             
             $D::stats{already_in_sync}++;
             
-        } elsif ($v1 eq 'unset') {
+        } elsif ($v1 eq 'unset' and $v1 ne 'unset') {
             # id3v1 is unset, but we have value in id3v2
             print "\t  '$field' in v2 is set to '$v2', synching\n" if $C::settings{verbose} ge 3;
             $vN{$field} = $v2;
             
             $D::stats{v2_synched_to_v1}++;
             
-        } elsif ($v2 eq 'unset') {
+        } elsif ($v2 eq 'unset' and $v1 ne 'unset') {
             # id3v2 is unset, but we have value in id3v2
             print "\t  '$field' in v1 is set to '$v1', synching\n" if $C::settings{verbose} ge 3;
             $vN{$field} = $v1;
@@ -137,18 +143,27 @@ foreach (sort keys %D::mp3) {
         } else {
             # both have data, but not the same.. need to key off of $C::settings{win}
             $D::stats{out_of_sync}++;
+            
+            
+            
         }
         
         
     }
     
-    print Dumper(\%v1);
-    print Dumper(\%v2);
-    print Dumper(\%vN);
+    print Dumper(\%v1); # current contents of id3v1
+    print Dumper(\%v2); # current contents of id3v2
+    print Dumper(\%vN); # contents to be written to both id3v1 and id3v2
     
-    # need to prompt the user before doing this if $C::settings{interactive}
-    put_id3($ffp, 'id3v1', \%vN);
-    put_id3($ffp, 'id3v2', \%vN); # this seems bulky
+    if (keys %vN) {
+        # need to prompt the user before doing this if $C::settings{interactive}
+        put_id3($ffp, 'id3v1', \%vN);
+        put_id3($ffp, 'id3v2', \%vN); # this seems bulky
+    } else {
+        warn "WARN:: all id3 tags missing from: $ffp\n";
+    }
+    
+
 }
 
 my @lt2 = localtime;
@@ -172,12 +187,13 @@ sub get_id3 {
     my %h;
     
     $version = uc($version);
-    $version = s/V/v/g;
+    $version =~ s/V/v/g;
     
     my $worker; # scope hack
     
     eval {
         $worker = MP3::Tag->new($ffp);
+        $worker->get_tags(); # need this or everything is undef
     };
     
     if ($@) {
@@ -204,7 +220,7 @@ sub put_id3 {
 sub is_skip {
     # is_skip($ffp) - returns 0|1 based on whether the user wants to skip this file
     my $ffp     = shift;
-    my @skips   = @{$C::settings{skip}};
+    my @skips   = @{$C::settings{skips}};
     my $results = 0;
     
     foreach (@skips) {
