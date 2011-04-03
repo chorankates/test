@@ -1,0 +1,15 @@
+# an alias to dump the contents of a scalar to disk: fileout <filename> <scalar>
+# $DB::alias{'fileout'} = $fh; open ($fh, '>', $1); print $fh $2; close($fh);
+
+sub ps { print "something!\n"; } # known working 
+
+sub pf { 
+        use Data::Dumper;
+        unless ($_[0] and $_[1]) { print "pf(filename, scalar)\n"; return; }
+	my $fh;
+	open ($fh, '>', $_[0]) or warn "unable to open '$_[0]: $!";
+	#print $fh "$_[1]\n";
+	print $fh Dumper($_[1])\n";
+	close ($fh);
+	print "!! dumped \$_[1] to '$_[0]'\n";
+}
