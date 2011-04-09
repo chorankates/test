@@ -1,0 +1,63 @@
+<xml>
+    <!-- preferred sources by site, probably only applies to tpb !-->
+    <settings>
+        <tpb>
+            <link_regex></link_regex>
+            <sources>
+                <name>eztv</name>
+                <name>VTV</name>
+            </sources>
+            <urls>
+                <url name='TV Top 100'>http://thepiratebay.org/top/205</url>
+                <!-- <url name='Music Top 100'>http://thepiratebay.org/top/101</url> !-->
+                <url name='Dynamic Search' type='search'>http://thepiratebay.org/search/!DYNAMIC!/0/99/0</url> <!-- will replace !DYNAMIC! with root name= values !-->
+            </urls>
+        </tpb>
+    </settings>
+
+    <!-- where to download files to !-->
+    <destinations>
+        <tpb>
+            <initial_dir>/home/conor/dl/_torrent/</initial_dir>
+            <final_dir>/home/conor/dl/_torrent/src/</final_dir> <!-- optional spec, not sure if we actually will implement !-->
+        </tpb>
+    </destinations>
+
+    <!-- after downloading file, how to handle it !-->
+    <handlers>
+        <tpb>torrent</tpb> 
+        <exe>./\b</exe> <!-- how you would execute a binary after download !-->
+    </handlers>
+
+    <tv_show name="Archer">
+        <regex>Archer.*S0[2-9]E\d+</regex>
+        <type>tpb</type>
+        <auto_download>1</auto_download>
+    </tv_show>
+
+    <tv_show name="Being Human">
+        <regex>Being[.\s]Human</regex>
+        <type>tpb</type>
+        <auto_download>1</auto_download>
+    </tv_show>
+
+    <tv_show name="Bob's Burgers">
+        <regex>Bob[.\s]Burgers</regex>
+        <type>tpb</type>
+        <auto_download>1</auto_download>
+    </tv_show>
+
+    <tv_show name="Burn Notice">
+        <regex>Burn[.\s]Notice.*S0[4-9]E.*</regex> <!-- limit searches to a range of seasons !-->
+        <type>tpb</type>
+        <auto_download>1</auto_download>
+    </tv_show>
+
+    <tv_show name="Chaos">
+        <regex>Chaos</regex> <!-- always case insensitive !-->
+        <type>tpb</type>
+        <auto_download>1</auto_download>
+    </tv_show>
+    
+    
+</xml>
