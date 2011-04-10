@@ -14,31 +14,42 @@ use strict;
 use warnings;
 use 5.010;
 
+use lib '/home/conor/Dropbox/perl/_pm/';
+use ironhide;
+
 use Cwd;
-use Data::UUID;
+use Data::Dumper;
+#use Data::UUID;
 use DBD::SQLite;
 use Digest::MD5;
+use File::Basename;
 use File::Find;
 use File::Spec;
 use Getopt::Long;
 use LWP::UserAgent;
 
-my (%f, %s); # flags, settings
+my (%f, %files, %s); # flags, results from dir_crawling, settings
 
 %s = (
     verbose  => 1, # 0 <= n <= 3
     database => 'dex.sqlite', # this can be overloaded, assume that it exists in $s{working_dir}
 	
 	dir     => {
-		tv 		=> '/media/pdisk1/tv/',
-		movies	=> '/media/pdisk2/movies/',
+		tv 	=> [ '/media/pdisk1/tv/', ],
+		movies	=> [ '/media/pdisk2/movies/', ],
 	},
 
 	table   => {
-		tv		=> 'tbl_tv',
+		tv	=> 'tbl_tv',
 		movies	=> 'tbl_movies',
 		
 	},
+	
+	media_types => [
+		'tv',
+		'movies',
+		#'mp3', # how can we incorporate this? generate html with folder.jpg?
+	],
 	
 	working_dir => Cwd::getcwd,
 	
@@ -49,42 +60,99 @@ $s{$_} = $f{$_} foreach (keys %f);
 $s{log_error} = "dex-crawl_error." . time . ".log";
 $s{image_dir} = File::Spec->catdir($s{working_dir}, "imdb_images");
 
-mkdir($s{image_dir}) or warn "WARN:: unable to create '$s{image_dir}': $!";
+my @t1 = localtime;
+print "% $0 started at ", nicetime(\@t1, "time"), "\n" if $s{verbose} ge 1;
+
+unless (-d $s{image_dir}) {
+	mkdir($s{image_dir}) or warn "WARN:: unable to create '$s{image_dir}': $!";
+}
+
+unless (-f $s{database}) {
+	my $results = create_db($s{database});
+	if ($results) {
+		warn "WARN:: unable to locate OR create '$s{database}': $results";
+		exit 1;
+	} else {
+		print "  created '$s{database}'\n" if $s{verbose} ge 1;
+	}
+	
+}
 
 print Dumper(\%f) if $s{verbose} ge 2;
 print Dumper(\%s) if $s{verbose} ge 1;
 
-## need to have some sort of timer here
+## find all the files.. all the files
+my @lt1 = localtime;
+foreach my $type (@{$s{media_types}}) {
+	print "> starting $type index:\n" if $s{verbose} ge 1;
+	my @dirs = @{$s{dir}{$type}};
+	
+	foreach my $dir (@dirs) {
+		print "  crawling '$dir'..\n" if $s{verbose} ge 2;
+		%files = crawl_dir($dir, 0, $type, \%files);
+	}
+	print "  done indexing $type\n" if $s{verbose} ge 3;
+}
+my @lt2 = localtime;
+print "> done indexing, found ", scalar keys %files, " files, took ", timetaken(\@lt1, \@lt2), "\n" if $s{verbose} ge 1;
 
+## find out which ones are new and add them to the db
+my @lt3 = localtime;
+my $added = 0;
+foreach my $ffp (keys %files) {
+	print "> adding new media to the db:\n" if $s{verbose} ge 1;
+	my $file = $files{$ffp}{basename};
+	my $type = $files{$ffp}{type};
+	
+	my $md5 = get_md5($file); # md5 of the filename string, not the file itself
+	
+	next if already_added($s{database}, $md5, $type);
+	
+	my %file_info = get_info_from_filename($file);
+	
+	## now add to the db
+	
+	$added++;
+}
+my @lt4 = localtime;
+print "> done adding, found/added $added new files, took ", timetaken(\@lt3, \@lt4), "\n" if $s{verbose} ge 1;
+
+# synergyc 192.168.1.122
+
+my @t2 = localtime;
+print "% $0 finished at ", nicetime(\@t2, "time"), " took ", timetaken(\@t1, \@t2), "\n" if $s{verbose} ge 1;
 exit 0;
 
 ## subs below
 
 sub crawl_dir {
-	# crawl_dir($dir, $depth) - returns hash of all possible video filenames
-	my ($dir, $depth) = @_;
-	my %h;
+	# crawl_dir($dir, $depth, $type, $href) - adds all possible video filenames to $href
+	my ($dir, $depth, $type, $href) = @_;
+	my %h = %{$href};
 	
-	print "> crawling '$dir'..\n" if $s{verbose} ge 1;
-	
-	my $start = time;
+	my @lt1 = localtime;
+	my $added = 0;
 	
 	find(
 		sub {
 			my $ffp = File::Spec->canonpath($File::Find::name);
 			return unless -f $ffp; # don't want directories
 			#return unless $ffp =~ /\.(avi|mp4|mpeg|mpg|mkv)$/; # short whitelist
-			return if $ffp =~ /\.(txt|log|srt|nfo)$/; # short blacklist
+			return if $ffp =~ /\.(txt|log|srt|nfo|jpg|png|htm)$/; # short blacklist
 
 			my $file = $File::Find::name;
+			my $basename = basename($file);
+			print "\tfound ", $basename, "\n" if $s{verbose} ge 3;
 
-			$h{$file} = 1;		
+			$h{$file}{type}     = $type;
+			$h{$file}{basename} = $basename;
+			$added++;
 		},
 		$dir
 	);
 	
-	my $stop = time;
-	print "\tdone, took " . ($stop - $start) . "\n" if $s{verbose} ge 1;
+	my @lt2 = localtime;
+	print "\tdone, added $added, (total: ", scalar keys %h, "), took " . timetaken(\@lt1, \@lt2), "\n" if $s{verbose} ge 2;
 	
 	return %h;
 }
@@ -120,7 +188,7 @@ sub get_info_from_filename {
 	if ($type =~ /movie/i) {
 		# Megamind (2010).avi
 		
-		my $title = $1 if $ffp =~ /(.*)\s\((\d*)\)\./;
+		my $title = $1 if $ffp =~ /(.*)\s\((\d*)\)?\./;
 		my $year  = $2 // "unknown";
 		
 		unless ($title and $year) {
@@ -211,8 +279,8 @@ sub log_error {
 	return;
 }
 
-sub do_sql {
-	# do_sql($database, $type, $href)  -- takes a hash of data and adds it to $database according to $type -- returns 0|1|2 for success|already known|failure
+sub put_sql {
+	# put_sql($database, $type, $href)  -- takes a hash of data and adds it to $database according to $type -- returns 0|1|2 for success|already known|failure
 	my ($database, $type, $href) = @_;
 	my $results = 0;
 	my $table;
@@ -274,15 +342,17 @@ sub get_sql {
 	
 	
 	
+	
 	return \%h;
 }
 
 sub already_added {
-	# already_added($database, $md5) -- does a quick check to determine if the $md5 passed is already in the $database -- returns 0|1 for no|yes
-	my ($database, $md5) = @_;
+	# already_added($database, $md5, $type) -- does a quick check to determine if the $md5 passed is already in the $database -- returns 0|1 for no|yes
+	my ($database, $md5, $type) = @_;
 	my $results = 0;
 	
-	my $sql = 'SELECT UID from '
+	my $table = $s{table}{$type};
+	my $sql   = "SELECT UID from $table WHERE UID == \"$md5\"";
 	
 	my $q = get_sql($database, $sql);
 	
@@ -297,4 +367,54 @@ sub get_md5 {
 	$results = Digest::MD5::md5_hex($string);
 	
 	return $results;
+}
+
+sub create_db {
+    # create_db($name) - creates a blank database ($name), returns 0 or an error message
+    my $name = shift @_;
+    my $results = 0;
+    
+    # need to open a db and create the default schema
+    # default schema is:
+    # CREATE TABLE tbl_main (url TEXT PRIMARY KEY, status_code TEXT, size NUMERIC, links TEXT)
+    my @tables = ('tbl_movies', 'tbl_tv');
+    
+    my $dbh = DBI->connect("dbi:SQLite:$name") or $results = $DBI::errstr;
+    
+    if ($results) { 
+    	warn "WARN:: unable to open db '$name', bailing out of this function";
+    	
+    	# this falls through to the default 'return' statement
+    	
+    } else {
+    	# so far so good
+    	
+	foreach my $tbl_name (@tables) {
+		my $schema;
+		
+		$schema = 'uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT' if $tbl_name eq 'tbl_movies';
+		$schema = 'uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, season NUMERIC, series NUMERIC, genre TEXT, notes TEXT'                    if $tbl_name eq 'tbl_tv';
+		next unless $schema; # failsafe
+	
+		my $query = $dbh->prepare(
+		    "CREATE TABLE $tbl_name ($schema)"
+		);
+	    
+		# ok, now to actually run the SQL
+		eval {
+		    $query->execute;
+		    
+		    # since this is a 'CREATE' statement, it doesn't have a necessary return value. add one for error checking in the future
+		};
+		
+		if ($@) { 
+		    warn "WARN:: error while creating default schema: $@";
+		    return $results;
+		}
+		
+		
+	}    	
+    }
+    
+    return $results;
 }
