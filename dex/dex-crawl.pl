@@ -54,6 +54,8 @@ my (%f, %files, %s); # flags, results from dir_crawling, settings
 		#'mp3', # how can we incorporate this? generate html with folder.jpg?
 	],
 	
+	function => 'crawl', # will want to change this to dex-cli.pl and add a 'query' function
+	
 	working_dir => Cwd::getcwd,
 	
 );
@@ -102,10 +104,9 @@ foreach my $type (@{$s{media_types}}) {
 		%files = crawl_dir($dir, 0, $type, \%files);
 	}
 	print "  done indexing $type\n" if $s{verbose} ge 3;
-	
-	store(\%files, $s{dbg_storable});
-	
 }
+
+store(\%files, $s{dbg_storable}); # should throw some debug message
 my @lt2 = localtime;
 print "> done indexing, found ", scalar keys %files, " files, took ", timetaken(\@lt1, \@lt2), "\n" if $s{verbose} ge 1;
 
@@ -121,9 +122,11 @@ foreach my $ffp (keys %files) {
 	
 	next if already_added($s{database}, $md5, $type);
 	
-	my %file_info = get_info_from_filename($file);
+	my %file_info = get_info_from_filename($file, $type);
 	
 	## now add to the db
+	
+	
 	
 	$added++;
 }
@@ -214,7 +217,9 @@ sub get_info_from_filename {
 		
 	} elsif ($type =~ /tv/i) {
 
-		my $count = $file =~ /-/g; # this will not work if there are -'s in the episode name
+		#my $count = $file =~ /-/g; # this will not work if there are -'s in the episode name
+		my @t = $file =~ /-/g;
+		my $count = (@t) ? $#t + 1 : 0; # lol @ typecasting
 		
 		my @a = split("-", $file);
 		
@@ -335,8 +340,8 @@ sub put_sql {
 }
 
 sub get_sql {
-	# get_sql($database, $sql) -- returns a href of data corresponding to $sql in $database
-	my ($database, $sql) = @_; # type = tv/movies
+	# get_sql($database, $sql, $type) -- returns a href of data corresponding to $sql in $database
+	my ($database, $sql, $type) = @_; # type = tv/movies
 	my %h;
 	
 	my $dbh = DBI->connect("dbi:SQLite:$database");
@@ -353,21 +358,48 @@ sub get_sql {
 	
 	my $q = $query->execute;
 	
+	# tv: 		uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, season NUMERIC, series NUMERIC, genre TEXT, notes TEXT
+	# movies:   uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT
 	
-	
+	while (my @r = $query->fetchrow_array()) {
+		if ($type =~ /tv/) {
+			my $u = $r[0];
+			$h{$u}{title}    = $r[1];
+			$h{$u}{added}    = $r[2];
+			$h{$u}{released} = $r[3];
+			$h{$u}{season}   = $r[4];
+			$h{$u}{series}   = $r[5];
+			$h{$u}{genre}    = $r[6];
+			$h{$u}{notes}    = $r[7];
+			
+		} else {
+			# movies
+			my $u = $r[0];
+			$h{$u}{title}    = $r[1];
+			$h{$u}{added}    = $r[2];
+			$h{$u}{released} = $r[3];
+			$h{$u}{imdb}     = $r[4];
+			$h{$u}{cover}    = $r[5];
+			$h{$u}{director} = $r[6];
+			$h{$u}{actors}   = $r[7];
+			$h{$u}{genre}    = $r[8];
+			$h{$u}{notes}    = $r[9];			
+		}
+	}
 	
 	return \%h;
 }
-
 sub already_added {
 	# already_added($database, $md5, $type) -- does a quick check to determine if the $md5 passed is already in the $database -- returns 0|1 for no|yes
 	my ($database, $md5, $type) = @_;
 	my $results = 0;
 	
 	my $table = $s{table}{$type};
-	my $sql   = "SELECT UID from $table WHERE UID == \"$md5\"";
+	my $sql   = "SELECT * from $table WHERE UID == \"$md5\""; # don't really need the whole match, but get_sql() freaks out if not
 	
-	my $q = get_sql($database, $sql);
+	my $q = get_sql($database, $sql, $type);
+	
+	$results = (keys %{$q}) ? 1 : 0;
 	
 	return $results;
 }
