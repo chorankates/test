@@ -2,7 +2,8 @@
 ## dex-crawl.pl -- script to gather information about TV shows and Movies on an external device (NAS for now)
 
 ## schema notes:
-# tv: 		uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, season NUMERIC, series NUMERIC, genre TEXT, notes TEXT
+# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
+#                42242243,              Psych,      04,                14          Think Tank,   unknown,   none,       2011/04/01, 2010/01/02
 # movies:   uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT
 
 # TODO
@@ -113,19 +114,28 @@ print "> done indexing, found ", scalar keys %files, " files, took ", timetaken(
 ## find out which ones are new and add them to the db
 my @lt3 = localtime;
 my $added = 0;
+print "> adding new media to the db:\n" if $s{verbose} ge 1;
 foreach my $ffp (keys %files) {
-	print "> adding new media to the db:\n" if $s{verbose} ge 1;
 	my $file = $files{$ffp}{basename};
 	my $type = $files{$ffp}{type};
 	
+	#next if $type =~ /movies/;
+	
+	print "  processing '$file'.." if $s{verbose} ge 2;
+	
 	my $md5 = get_md5($file); # md5 of the filename string, not the file itself
 	
-	next if already_added($s{database}, $md5, $type);
+	if (already_added($s{database}, $md5, $type)) {
+		print " already exists, skipping\n" if $s{verbose} ge 2;
+		next;
+	} else {
+		print "  unknown MD5, adding\n" if $s{verbose} ge 2;
+	}
 	
-	my %file_info = get_info_from_filename($file, $type);
+	my %file_info = get_info_from_filename($ffp, $file, $type);
 	
 	## now add to the db
-	
+	my $results = put_sql($s{database}, $type, \%file_info);
 	
 	
 	$added++;
@@ -193,18 +203,19 @@ sub get_uid {
 }
 
 sub get_info_from_filename {
-	# get_info_from_filename($ffp, $type) -- returns a hash of information based on $ffp and $type (tv|movies)
+	# get_info_from_filename($ffp, $file, $type) -- returns a hash of information based on $ffp and $type (tv|movies)
 	
 	# if we can't parse the filename as expected, need to log it out to the error file and prevent it from being added to the DB until filename has been fixed
 	
-	my ($ffp, $type) = @_;
-	my $file = (File::Spec->splitpath($ffp))[2];
+	my ($ffp, $file, $type) = @_;
+	#my $file = (File::Spec->splitpath($ffp))[2];
 	my %h;
 
-	my $ctime = scalar localtime(stat($ffp))[10]);
-my @lt = localtime;
-my $atime = nicetime(\@lt, "both");
-
+	my $ctime = scalar localtime((stat($ffp))[9]); # 10 = ctime, 9 = mtime.. getting better results with 9
+	my @lt = localtime;
+	my $atime = nicetime(\@lt, "both"); # will be adding this to the db as well for future additions
+	$h{ctime} = $ctime; # not currently in the schema
+	$h{added} = $atime; # added time
 	
 	if ($type =~ /movie/i) {
 		# Megamind (2010).avi
@@ -221,28 +232,36 @@ my $atime = nicetime(\@lt, "both");
 		$h{year}  = $year;
 		
 	} elsif ($type =~ /tv/i) {
-
+		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
 		#my $count = $file =~ /-/g; # this will not work if there are -'s in the episode name
 		my @t = $file =~ /-/g;
 		my $count = (@t) ? $#t + 1 : 0; # lol @ typecasting
 		
-		my @a = split("-", $file);
+		$h{uid}      = get_md5($file);
+		$h{released} = 'unknown'; # don't currently have a good way of pulling this
+		$h{genre}    = 'unknown';
+		$h{notes}    = '';
+		
+		my @a = split(/\s?-\s?/, $file);
 		
 		if ($count == 1) {
 			# Angry Beavers - Zooing Time.mp4
-			$h{series} = $a[0];
+			$h{show} = $a[0];
 			$h{title}  = $a[1];
+			
+			$h{season}  = 'unknown';
+			$h{episode} = 'unknown';
 			
 		} elsif ($count == 3) {
 			# Burn Notice - 01 - 10 - False Flag.avi
-			$h{series}  = $a[0];
+			$h{show}  = $a[0];
 			$h{season}  = $a[1];
 			$h{episode} = $a[2];
 			$h{title}   = $a[3];
 			
 		} elsif ($count == 4) {
 			# Burn Notice - 01 - 11-12 - Drop Dead and Loose Ends.avi
-			$h{series}  = $a[0];
+			$h{show}  = $a[0];
 			$h{season}  = $a[1];
 			$h{episode} = $a[2] . '-' . $a[3];
 			$h{title}   = $a[4];
@@ -251,6 +270,8 @@ my $atime = nicetime(\@lt, "both");
 			log_error("unrecognized filename format: $ffp");
 			return %h;
 		}
+		
+		$h{title} =~ s/(\..*?$)//; # chopping the file extension
 		
 		return %h;
 		
@@ -305,6 +326,7 @@ sub log_error {
 sub put_sql {
 	# put_sql($database, $type, $href)  -- takes a hash of data and adds it to $database according to $type -- returns 0|1|2 for success|already known|failure
 	my ($database, $type, $href) = @_;
+	my %h = %{$href};
 	my $results = 0;
 	my $table;
 	my $query;
@@ -316,17 +338,22 @@ sub put_sql {
 	if ($type =~ /tv/) {
 		$table = 'tbl_tv';
 		
-		# need to check to see if this is already in the DB
-		
-		
+		# need to check to see if this is already in the DB -- not at this tim, already ran a check
+		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
 		$query = $dbh->prepare("
-							   ");
+					INSERT
+					INTO $table
+					(uid, show, season, episode, title, genre, notes, added, released)
+					VALUES ('$h{uid}', '$h{show}', '$h{season}', '$h{episode}', '$h{title}', '$h{genre}', '$h{notes}', '$h{added}', '$h{released}')
+					");
+
 		
 	} elsif ($type =~ /movie/) {
 		$table = 'tbl_movies';
 		
 		# need to check to make sure this isn't already in the DB
 		
+		return 2; # for now
 		
 		$query = $dbh->prepare("
 							   ");
@@ -337,9 +364,16 @@ sub put_sql {
 		return 2;
 	}
 	
-	my $qresults = $query->execute;
+	my $qresults;
+
+	eval {
+		$qresults = $query->execute;
+	};
 	
-	$results = 2 if $DBI::errstr;
+	if ($@) {
+		$results = 2;
+		warn "WARN:: unable to add entry: $DBI::errstr";
+	}
 	
 	return $results;
 }
@@ -364,18 +398,19 @@ sub get_sql {
 	my $q = $query->execute;
 	
 	# tv: 		uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, season NUMERIC, series NUMERIC, genre TEXT, notes TEXT
-	# movies:   uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT
+	# movies:   uid TEXT PRIMARY KEY, title TEXT, show TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT
 	
 	while (my @r = $query->fetchrow_array()) {
 		if ($type =~ /tv/) {
 			my $u = $r[0];
 			$h{$u}{title}    = $r[1];
-			$h{$u}{added}    = $r[2];
-			$h{$u}{released} = $r[3];
-			$h{$u}{season}   = $r[4];
-			$h{$u}{series}   = $r[5];
-			$h{$u}{genre}    = $r[6];
-			$h{$u}{notes}    = $r[7];
+			$h{$u}{show}     = $r[2];
+			$h{$u}{added}    = $r[3];
+			$h{$u}{released} = $r[4];
+			$h{$u}{season}   = $r[5];
+			$h{$u}{series}   = $r[6];
+			$h{$u}{genre}    = $r[7];
+			$h{$u}{notes}    = $r[8];
 			
 		} else {
 			# movies
@@ -442,8 +477,9 @@ sub create_db {
 	foreach my $tbl_name (@tables) {
 		my $schema;
 		
+		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
 		$schema = 'uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT' if $tbl_name eq 'tbl_movies';
-		$schema = 'uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, season NUMERIC, series NUMERIC, genre TEXT, notes TEXT'                    if $tbl_name eq 'tbl_tv';
+		$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT'        if $tbl_name eq 'tbl_tv';
 		next unless $schema; # failsafe
 	
 		my $query = $dbh->prepare(
