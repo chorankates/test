@@ -4,7 +4,7 @@ sub pf {
         unless ($_[0] and $_[1]) { print "pf(filename, \data)"; return; }
 	my $fh;
 	open ($fh, '>', $_[0]) or warn "unable to open '$_[0]: $!";
-	print $fh Dumper($_[1])\n";
+	print $fh Dumper($_[1]);
 	close ($fh);
 	print "!! dumped \$_[1] to '$_[0]'\n";
 }
