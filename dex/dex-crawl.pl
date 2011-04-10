@@ -200,6 +200,11 @@ sub get_info_from_filename {
 	my ($ffp, $type) = @_;
 	my $file = (File::Spec->splitpath($ffp))[2];
 	my %h;
+
+	my $ctime = scalar localtime(stat($ffp))[10]);
+my @lt = localtime;
+my $atime = nicetime(\@lt, "both");
+
 	
 	if ($type =~ /movie/i) {
 		# Megamind (2010).avi
