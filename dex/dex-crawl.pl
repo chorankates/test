@@ -27,13 +27,16 @@ use File::Find;
 use File::Spec;
 use Getopt::Long;
 use LWP::UserAgent;
+use Storable;
 
 my (%f, %files, %s); # flags, results from dir_crawling, settings
 
 %s = (
     verbose  => 1, # 0 <= n <= 3
     database => 'dex.sqlite', # this can be overloaded, assume that it exists in $s{working_dir}
-	
+    debug    => 1, # overload the indexing with a storable 
+	dbg_storable => 'latest_index.sbl', 
+
 	dir     => {
 		tv 	=> [ '/media/pdisk1/tv/', ],
 		movies	=> [ '/media/pdisk2/movies/', ],
@@ -55,7 +58,7 @@ my (%f, %files, %s); # flags, results from dir_crawling, settings
 	
 );
 
-GetOptions(\%f, "help", "dir:s", "verbose:i", "database:s", "working_dir:s");
+GetOptions(\%f, "help", "dir:s", "verbose:i", "database:s", "working_dir:s", "debug:i");
 $s{$_} = $f{$_} foreach (keys %f);
 $s{log_error} = "dex-crawl_error." . time . ".log";
 $s{image_dir} = File::Spec->catdir($s{working_dir}, "imdb_images");
@@ -84,6 +87,13 @@ print Dumper(\%s) if $s{verbose} ge 1;
 ## find all the files.. all the files
 my @lt1 = localtime;
 foreach my $type (@{$s{media_types}}) {
+	if ($s{debug} and -f $s{dbg_storable}) {
+		print "DBG:: skipping dynamic crawling..\n";
+		my $href = retrieve($s{dbg_storable});
+		%files = %{$href};
+		last;
+	}
+	
 	print "> starting $type index:\n" if $s{verbose} ge 1;
 	my @dirs = @{$s{dir}{$type}};
 	
@@ -92,6 +102,9 @@ foreach my $type (@{$s{media_types}}) {
 		%files = crawl_dir($dir, 0, $type, \%files);
 	}
 	print "  done indexing $type\n" if $s{verbose} ge 3;
+	
+	store(\%files, $s{dbg_storable});
+	
 }
 my @lt2 = localtime;
 print "> done indexing, found ", scalar keys %files, " files, took ", timetaken(\@lt1, \@lt2), "\n" if $s{verbose} ge 1;
