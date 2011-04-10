@@ -40,7 +40,12 @@
         <type>tpb</type>
         <auto_download>1</auto_download>
     </tv_show>
-
+	
+	<tv_show name="Body Of Proof"       type="tpb" auto_download=1 regex="Body[.\s]Of[.\s]Proof">
+	<tv_show name="Californication"     type="tpb" auto_download=1 regex="Californication">
+	<tv_show name="Camelot"             type="tpb" auto_download=1 regex="Camelot">
+	<tv_show name="The Vampire Diaries" type="tpb" auto_download=1 regex="The[.\s]Vampire[.\s]Diaries">
+	
     <tv_show name="Bob's Burgers">
         <regex>Bob[.\s]Burgers</regex>
         <type>tpb</type>
