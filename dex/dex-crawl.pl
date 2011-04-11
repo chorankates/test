@@ -2,8 +2,8 @@
 ## dex-crawl.pl -- script to gather information about TV shows and Movies on an external device (NAS for now)
 
 ## schema notes:
-# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
-#                42242243,              Psych,      04,                14          Think Tank,   unknown,   none,       2011/04/01, 2010/01/02
+# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT
+#                42242243,              Psych,      04,                14          Think Tank,   unknown,   none,       2011/04/01, 2010/01/02,  /media/pdisk1/tv/Psych/Psych - Season 04/Psych - 04 - 14 - Think Tank.avi
 # movies:   uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT
 
 # TODO
@@ -119,7 +119,7 @@ foreach my $ffp (keys %files) {
 	my $file = $files{$ffp}{basename};
 	my $type = $files{$ffp}{type};
 	
-	#next if $type =~ /movies/;
+	next if $type =~ /movies/;
 	
 	print "  processing '$file'.." if $s{verbose} ge 2;
 	
@@ -133,6 +133,8 @@ foreach my $ffp (keys %files) {
 	}
 	
 	my %file_info = get_info_from_filename($ffp, $file, $type);
+	
+	next if ($file_info{error}); # already logged a warning
 	
 	## now add to the db
 	my $results = put_sql($s{database}, $type, \%file_info);
@@ -164,7 +166,7 @@ sub crawl_dir {
 			my $ffp = File::Spec->canonpath($File::Find::name);
 			return unless -f $ffp; # don't want directories
 			#return unless $ffp =~ /\.(avi|mp4|mpeg|mpg|mkv)$/; # short whitelist
-			return if $ffp =~ /\.(txt|log|srt|nfo|jpg|png|htm)$/; # short blacklist
+			return if $ffp =~ /\.(txt|log|srt|nfo|jpg|png|htm|ico|idx)$/i; # short blacklist
 
 			my $file = $File::Find::name;
 			my $basename = basename($file);
@@ -216,15 +218,20 @@ sub get_info_from_filename {
 	my $atime = nicetime(\@lt, "both"); # will be adding this to the db as well for future additions
 	$h{ctime} = $ctime; # not currently in the schema
 	$h{added} = $atime; # added time
+	$h{relpath} = $ffp;
 	
 	if ($type =~ /movie/i) {
 		# Megamind (2010).avi
 		
-		my $title = $1 if $ffp =~ /(.*)\s\((\d*)\)?\./;
-		my $year  = $2 // "unknown";
+		my $title = $1 if $ffp =~ /.*\/(.*)\..*?$/;
+		my $year  = $2 if $ffp =~ /.*\/(.*?)\s?\((.*?\))\..*?$/;
+		
+		$year = 'unknown' unless defined $year;
 		
 		unless ($title and $year) {
-			log_error("unrecognized filename format: $ffp");
+			$h{error} = "unrecognized filename format: $ffp";
+			log_error($h{error});
+			
 			return %h;
 		}
 		
@@ -259,15 +266,27 @@ sub get_info_from_filename {
 			$h{episode} = $a[2];
 			$h{title}   = $a[3];
 			
-		} elsif ($count == 4) {
-			# Burn Notice - 01 - 11-12 - Drop Dead and Loose Ends.avi
-			$h{show}  = $a[0];
-			$h{season}  = $a[1];
-			$h{episode} = $a[2] . '-' . $a[3];
-			$h{title}   = $a[4];
+		} elsif ($count >= 4) {
+			
+			if ($a[4] =~ /^\d*$/) {
+				# Burn Notice - 01 - 11-12 - Drop Dead and Loose Ends.avi
+				$h{show}  = $a[0];
+				$h{season}  = $a[1];
+				$h{episode} = $a[2] . '-' . $a[3];
+				$h{title}   = join(" ", @a[4..$#a]);
+			} else {
+				# But could also be Burn Notice - 01 - 11 - Drop-Dead And Lose Ends
+				$h{show}  = $a[0];
+				$h{season}  = $a[1];
+				$h{episode} = $a[2];
+				$h{title}   = join("-", @a[3..$#a]);
+			}
+			
+			
 			
 		} else {
-			log_error("unrecognized filename format: $ffp");
+			$h{error} = "unrecognized filename format: $ffp";
+			log_error($h{error});
 			return %h;
 		}
 		
@@ -331,6 +350,11 @@ sub put_sql {
 	my $table;
 	my $query;
 	
+	## cleanup for SQL
+	foreach my $key (keys %h) {
+		$h{$key} =~ s/'/"/g;
+	}
+	
 	return 2 unless -f $database;
 	
 	my $dbh = DBI->connect("dbi:SQLite:$database") or warn "WARN:: unable to connect to '$database': $DBI::errstr" and return 2;
@@ -339,12 +363,12 @@ sub put_sql {
 		$table = 'tbl_tv';
 		
 		# need to check to see if this is already in the DB -- not at this tim, already ran a check
-		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
+		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT
 		$query = $dbh->prepare("
 					INSERT
 					INTO $table
-					(uid, show, season, episode, title, genre, notes, added, released)
-					VALUES ('$h{uid}', '$h{show}', '$h{season}', '$h{episode}', '$h{title}', '$h{genre}', '$h{notes}', '$h{added}', '$h{released}')
+					(uid, show, season, episode, title, genre, notes, added, released, relpath)
+					VALUES ('$h{uid}', '$h{show}', '$h{season}', '$h{episode}', '$h{title}', '$h{genre}', '$h{notes}', '$h{added}', '$h{released}', '$h{relpath}')
 					");
 
 		
@@ -397,20 +421,22 @@ sub get_sql {
 	
 	my $q = $query->execute;
 	
-	# tv: 		uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, season NUMERIC, series NUMERIC, genre TEXT, notes TEXT
+	# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT
 	# movies:   uid TEXT PRIMARY KEY, title TEXT, show TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT
 	
 	while (my @r = $query->fetchrow_array()) {
 		if ($type =~ /tv/) {
 			my $u = $r[0];
-			$h{$u}{title}    = $r[1];
-			$h{$u}{show}     = $r[2];
-			$h{$u}{added}    = $r[3];
-			$h{$u}{released} = $r[4];
-			$h{$u}{season}   = $r[5];
-			$h{$u}{series}   = $r[6];
-			$h{$u}{genre}    = $r[7];
-			$h{$u}{notes}    = $r[8];
+			$h{$u}{show}     = $r[1];
+			$h{$u}{season}   = $r[2];
+			$h{$u}{episode}  = $r[3];
+			$h{$u}{title}    = $r[4];
+			$h{$u}{genre}    = $r[5];
+			$h{$u}{notes}    = $r[6];
+			$h{$u}{added}    = $r[7];
+			$h{$u}{released} = $r[8];
+			$h{$u}{relpath}   = $r[9];
+
 			
 		} else {
 			# movies
@@ -478,8 +504,8 @@ sub create_db {
 		my $schema;
 		
 		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
-		$schema = 'uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT' if $tbl_name eq 'tbl_movies';
-		$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT'        if $tbl_name eq 'tbl_tv';
+		$schema = 'uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT'         if $tbl_name eq 'tbl_movies';
+		$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT'  if $tbl_name eq 'tbl_tv';
 		next unless $schema; # failsafe
 	
 		my $query = $dbh->prepare(
