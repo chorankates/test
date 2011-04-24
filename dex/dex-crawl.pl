@@ -63,12 +63,19 @@ my (%f, %files, %s); # flags, results from dir_crawling, settings
 	
 );
 
-GetOptions(\%f, "help", "dir:s", "verbose:i", "database:s", "working_dir:s", "debug:i");
+GetOptions(\%f, "help", "dir:s", "verbose:i", "database:s", "working_dir:s", "debug:i", "rescan:i");
 $s{$_} = $f{$_} foreach (keys %f);
 $s{image_dir} = File::Spec->catdir($s{working_dir}, "imdb_images");
 
 my @t1 = localtime;
 print "% $0 started at ", nicetime(\@t1, "time"), "\n" if $s{verbose} ge 1;
+
+if ($s{rescan}) {
+	# delete artifacts and scan from scratch
+	print "> removing artifacts..\n" if $s{verbose} ge 1;
+	unlink ($s{database}) or warn "WARN:: unable to remove $s{database}: $!";
+	unlink ($s{debug}{dbg_storable}) or warn "WARN:: unable to remove $s{debug}{dbg_storable}: $!";
+}
 
 unless (-d $s{image_dir}) {
 	mkdir($s{image_dir}) or warn "WARN:: unable to create '$s{image_dir}': $!";
@@ -90,12 +97,14 @@ print Dumper(\%s) if $s{verbose} ge 1;
 
 ## remove files that no longer exist
 my @lt_remove_begin = localtime;
+print "> remove_non_existent_entries($s{database}):\n" if $s{verbose} ge 1;
 my $remove_results = remove_non_existent_entries($s{database});
 my @lt_remove_end = localtime;
-print "> done removing non-existent entries, took ", timetaken(\@lt_remove_begin, \@lt_remove_end), "\n" if $s{verbose} ge 1;
+print "  done removing non-existent entries, took ", timetaken(\@lt_remove_begin, \@lt_remove_end), "\n" if $s{verbose} ge 1;
 
 ## find all the files.. all the files
 my @lt_find_files_begin = localtime;
+print "> indexing media (" . join("," . @{$s{media_types}}) . ")\n" if $s{verbose} ge 1;
 foreach my $type (@{$s{media_types}}) {
 	if ($s{debug} and -f $s{dbg_storable}) {
 		print "DBG:: skipping dynamic crawling..\n";
@@ -104,19 +113,21 @@ foreach my $type (@{$s{media_types}}) {
 		last;
 	}
 	
-	print "> starting $type index:\n" if $s{verbose} ge 1;
+	my @lt_index_time_begin = localtime;
+	print "  indexing $type:\n" if $s{verbose} ge 1;
 	my @dirs = @{$s{dir}{$type}};
 	
 	foreach my $dir (@dirs) {
 		print "  crawling '$dir'..\n" if $s{verbose} ge 2;
 		%files = crawl_dir($dir, 0, $type, \%files);
 	}
-	print "  done indexing $type\n" if $s{verbose} ge 3;
+	my @lt_index_time_end = localtime;
+	print "  done indexing $type, took ", timetaken(\@lt_index_time_begin, \@lt_index_time_end), "\n" if $s{verbose} ge 2;
 }
 
 store(\%files, $s{dbg_storable}); # should throw some debug message
 my @lt_find_files_end = localtime;
-print "> done indexing, found ", scalar keys %files, " files, took ", timetaken(\@lt_find_files_begin, \@lt_find_files_end), "\n" if $s{verbose} ge 1;
+print "  done indexing media, found ", scalar keys %files, " files, took ", timetaken(\@lt_find_files_begin, \@lt_find_files_end), "\n" if $s{verbose} ge 1;
 
 ## find out which ones are new and add them to the db
 my @lt_find_new_files_begin = localtime;
@@ -127,16 +138,19 @@ foreach my $ffp (keys %files) {
 	my $file = $files{$ffp}{basename};
 	my $type = $files{$ffp}{type};
 	
-	print "$processed ::  processing '$file'.." if $s{verbose} ge 2;
+	#this verbosity is wonky.. need to fix it, until then, stick with verbose=2 or 0
+	print "  $processed ::  processing '$file'.." if $s{verbose} ge 2;
 	
 	my $md5 = get_md5($file); # md5 of the filename string, not the file itself
 	
 	if (already_added($s{database}, $md5, $type)) {
-		print " " x (70 - length($file)), "already exists, skipping\n" if $s{verbose} ge 2;
+		print " " x (90 - length($file)), "already exists, skipping\n" if $s{verbose} ge 2;
 		next;
 	} else {
-		print " " x (70 - length($file)), "unknown MD5, adding\n" if $s{verbose} ge 2;
+		print " " x (90 - length($file)), "unknown MD5, adding\n" if $s{verbose} ge 1;
 	}
+	
+	
 	
 	# should have a $processed/$total print out here.. every 10%?
 	
@@ -151,7 +165,7 @@ foreach my $ffp (keys %files) {
 	$added++;
 }
 my @lt_find_new_files_end = localtime;
-print "> done adding, found/added $added new files, took ", timetaken(\@lt_find_new_files_begin, \@lt_find_new_files_end), "\n" if $s{verbose} ge 1;
+print "  done adding, found/added $added new files, took ", timetaken(\@lt_find_new_files_begin, \@lt_find_new_files_end), "\n" if $s{verbose} ge 1;
 
 # synergyc 192.168.1.122
 
@@ -356,8 +370,6 @@ sub remove_non_existent_entries {
 	# might be faster to do this after indexing (but would require us to load the entire DB into memory to compare)
 	my $database = shift;
 	
-	print "> remove_non_existent_entries($database):\n" if $s{verbose} ge 1;
-	
 	my ($dbh, $query, $q); # scope hacking
 	
 	foreach my $type (@{$s{media_types}}) {
@@ -385,6 +397,8 @@ sub remove_non_existent_entries {
 			my $uid = $r[0];
 			my $ffp = $r[1];
 		
+			$ffp =~ s/\^/'/g;
+		
 			# see if the file still exists
 			unless (-f $ffp) {
 				# DELETE FROM tbl_tv WHERE uid == "ab3bc886eebe63ee5487fef62e3523e2"
@@ -398,8 +412,6 @@ sub remove_non_existent_entries {
 		# now actually removing the entries
 		foreach my $uid (keys %removes) {
 			my $ffp = $removes{$uid}; # need to undo any changes made to insert into SQL
-			
-			$ffp =~ s/^/'/g;
 			
 			print "  removing '$ffp' ($uid)\n" if $s{verbose} ge 1;
 			$sql = "DELETE FROM $table WHERE uid == \"$uid\"";
