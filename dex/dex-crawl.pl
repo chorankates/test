@@ -113,24 +113,27 @@ print "> done indexing, found ", scalar keys %files, " files, took ", timetaken(
 
 ## find out which ones are new and add them to the db
 my @lt3 = localtime;
-my $added = 0;
+my ($added, $processed) = (0, 0);
 print "> adding new media to the db:\n" if $s{verbose} ge 1;
 foreach my $ffp (keys %files) {
+	$processed++;
 	my $file = $files{$ffp}{basename};
 	my $type = $files{$ffp}{type};
 	
 	next if $type =~ /movies/;
 	
-	print "  processing '$file'.." if $s{verbose} ge 2;
+	print "$processed ::  processing '$file'.." if $s{verbose} ge 2;
 	
 	my $md5 = get_md5($file); # md5 of the filename string, not the file itself
 	
 	if (already_added($s{database}, $md5, $type)) {
-		print " already exists, skipping\n" if $s{verbose} ge 2;
+		print " " x (70 - length($file)), "already exists, skipping\n" if $s{verbose} ge 2;
 		next;
 	} else {
-		print "  unknown MD5, adding\n" if $s{verbose} ge 2;
+		print " " x (70 - length($file)), "unknown MD5, adding\n" if $s{verbose} ge 2;
 	}
+	
+	# should have a $processed/$total print out here.. every 10%?
 	
 	my %file_info = get_info_from_filename($ffp, $file, $type);
 	
@@ -166,7 +169,7 @@ sub crawl_dir {
 			my $ffp = File::Spec->canonpath($File::Find::name);
 			return unless -f $ffp; # don't want directories
 			#return unless $ffp =~ /\.(avi|mp4|mpeg|mpg|mkv)$/; # short whitelist
-			return if $ffp =~ /\.(txt|log|srt|nfo|jpg|png|htm|ico|idx)$/i; # short blacklist
+			return if $ffp =~ /\.(txt|log|srt|nfo|jpg|png|htm|ico|idx|sub|mp3|sfv|pdf)$/i; # short blacklist
 
 			my $file = $File::Find::name;
 			my $basename = basename($file);
@@ -244,10 +247,18 @@ sub get_info_from_filename {
 		my @t = $file =~ /-/g;
 		my $count = (@t) ? $#t + 1 : 0; # lol @ typecasting
 		
+		unless ($#t) {
+			$h{error} = "unknown file format: $ffp";
+			log_error($h{error});
+			return %h;
+		}
+		
 		$h{uid}      = get_md5($file);
 		$h{released} = 'unknown'; # don't currently have a good way of pulling this
 		$h{genre}    = 'unknown';
 		$h{notes}    = '';
+		
+		# why are we always getting 'n' when '0n' is passed in?
 		
 		my @a = split(/\s?-\s?/, $file);
 		
@@ -399,6 +410,8 @@ sub put_sql {
 		warn "WARN:: unable to add entry: $DBI::errstr";
 	}
 	
+	$dbh->disconnect;
+	
 	return $results;
 }
 
@@ -452,6 +465,8 @@ sub get_sql {
 			$h{$u}{notes}    = $r[9];			
 		}
 	}
+	
+	$dbh->disconnect;
 	
 	return \%h;
 }
