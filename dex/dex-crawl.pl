@@ -15,6 +15,9 @@ use strict;
 use warnings;
 use 5.010;
 
+use lib 'lib/';
+use dex::util;
+
 use lib '/home/conor/Dropbox/perl/_pm/';
 use ironhide;
 
@@ -22,7 +25,6 @@ use Cwd;
 use Data::Dumper;
 #use Data::UUID;
 use DBD::SQLite;
-use Digest::MD5;
 use File::Basename;
 use File::Find;
 use File::Spec;
@@ -63,7 +65,6 @@ my (%f, %files, %s); # flags, results from dir_crawling, settings
 
 GetOptions(\%f, "help", "dir:s", "verbose:i", "database:s", "working_dir:s", "debug:i");
 $s{$_} = $f{$_} foreach (keys %f);
-$s{log_error} = "dex-crawl_error." . time . ".log";
 $s{image_dir} = File::Spec->catdir($s{working_dir}, "imdb_images");
 
 my @t1 = localtime;
@@ -169,7 +170,7 @@ sub crawl_dir {
 			my $ffp = File::Spec->canonpath($File::Find::name);
 			return unless -f $ffp; # don't want directories
 			#return unless $ffp =~ /\.(avi|mp4|mpeg|mpg|mkv)$/; # short whitelist
-			return if $ffp =~ /\.(txt|log|srt|nfo|jpg|png|htm|ico|idx|sub|mp3|sfv|pdf)$/i; # short blacklist
+			return if $ffp =~ /\.(txt|log|srt|nfo|jpg|png|htm|ico|idx|sub|mp3|sfv|pdf|ini)$/i; # short blacklist
 
 			my $file = $File::Find::name;
 			my $basename = basename($file);
@@ -188,130 +189,6 @@ sub crawl_dir {
 	return %h;
 }
 
-sub get_uid {
-    # get_uid($title) - returns a unique identifier (based on UUID for now, but could be MD5)
-	my $title = shift;
-	my $uid;
-	
-	if (0) {
-		# this is good, but doesn't allow for backwards comparison
-		my $worker = new Data::UUID;
-	
-		$uid = $worker->create_str();
-	} else {
-		# this makes it easy to determine if we've already added this to the db
-		$uid = get_md5($title);
-		
-	}
-	
-	return $uid;
-}
-
-sub get_info_from_filename {
-	# get_info_from_filename($ffp, $file, $type) -- returns a hash of information based on $ffp and $type (tv|movies)
-	
-	# if we can't parse the filename as expected, need to log it out to the error file and prevent it from being added to the DB until filename has been fixed
-	
-	my ($ffp, $file, $type) = @_;
-	#my $file = (File::Spec->splitpath($ffp))[2];
-	my %h;
-
-	my $ctime = scalar localtime((stat($ffp))[9]); # 10 = ctime, 9 = mtime.. getting better results with 9
-	my @lt = localtime;
-	my $atime = nicetime(\@lt, "both"); # will be adding this to the db as well for future additions
-	$h{ctime} = $ctime; # not currently in the schema
-	$h{added} = $atime; # added time
-	$h{relpath} = $ffp;
-	
-	if ($type =~ /movie/i) {
-		# Megamind (2010).avi
-		
-		my $title = $1 if $ffp =~ /.*\/(.*)\..*?$/;
-		my $year  = $2 if $ffp =~ /.*\/(.*?)\s?\((.*?\))\..*?$/;
-		
-		$year = 'unknown' unless defined $year;
-		
-		unless ($title and $year) {
-			$h{error} = "unrecognized filename format: $ffp";
-			log_error($h{error});
-			
-			return %h;
-		}
-		
-		$h{title} = $title;
-		$h{year}  = $year;
-		
-	} elsif ($type =~ /tv/i) {
-		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
-		#my $count = $file =~ /-/g; # this will not work if there are -'s in the episode name
-		my @t = $file =~ /-/g;
-		my $count = (@t) ? $#t + 1 : 0; # lol @ typecasting
-		
-		unless ($#t) {
-			$h{error} = "unknown file format: $ffp";
-			log_error($h{error});
-			return %h;
-		}
-		
-		$h{uid}      = get_md5($file);
-		$h{released} = 'unknown'; # don't currently have a good way of pulling this
-		$h{genre}    = 'unknown';
-		$h{notes}    = '';
-		
-		# why are we always getting 'n' when '0n' is passed in?
-		
-		my @a = split(/\s?-\s?/, $file);
-		
-		if ($count == 1) {
-			# Angry Beavers - Zooing Time.mp4
-			$h{show} = $a[0];
-			$h{title}  = $a[1];
-			
-			$h{season}  = 'unknown';
-			$h{episode} = 'unknown';
-			
-		} elsif ($count == 3) {
-			# Burn Notice - 01 - 10 - False Flag.avi
-			$h{show}  = $a[0];
-			$h{season}  = $a[1];
-			$h{episode} = $a[2];
-			$h{title}   = $a[3];
-			
-		} elsif ($count >= 4) {
-			
-			if ($a[4] =~ /^\d*$/) {
-				# Burn Notice - 01 - 11-12 - Drop Dead and Loose Ends.avi
-				$h{show}  = $a[0];
-				$h{season}  = $a[1];
-				$h{episode} = $a[2] . '-' . $a[3];
-				$h{title}   = join(" ", @a[4..$#a]);
-			} else {
-				# But could also be Burn Notice - 01 - 11 - Drop-Dead And Lose Ends
-				$h{show}  = $a[0];
-				$h{season}  = $a[1];
-				$h{episode} = $a[2];
-				$h{title}   = join("-", @a[3..$#a]);
-			}
-			
-			
-			
-		} else {
-			$h{error} = "unrecognized filename format: $ffp";
-			log_error($h{error});
-			return %h;
-		}
-		
-		$h{title} =~ s/(\..*?$)//; # chopping the file extension
-		
-		return %h;
-		
-	} else {
-		warn "WARN:: invalid type '$type', returning empty hash\n";
-		return %h;
-	}
-	
-	return %h;
-}
 
 sub get_imdb {
 	# get_imdb($movie) - given a $movie title, returns a hash of information about the first match found
@@ -335,22 +212,6 @@ sub get_imdb {
 	$h{genre}    = ''; # CSV
 	
 	return %h;
-}
-
-sub log_error {
-	# log_error($string) -- throws an error to the console and writes out to $s{log_error}
-	my $string = shift;
-	
-	my $fh;
-	open($fh, '>>', $s{log_error}) or warn "WARN:: unable to open '$s{log_error}':$!";
-	if ($fh) {
-		print $fh scalar(localtime(time)) . "::" . $string . "\n";
-		close($fh);
-	}
-	
-	warn "WARN:: $string\n"; # key off of verbosity?
-	
-	return;
 }
 
 sub put_sql {
@@ -470,6 +331,7 @@ sub get_sql {
 	
 	return \%h;
 }
+
 sub already_added {
 	# already_added($database, $md5, $type) -- does a quick check to determine if the $md5 passed is already in the $database -- returns 0|1 for no|yes
 	my ($database, $md5, $type) = @_;
@@ -483,65 +345,4 @@ sub already_added {
 	$results = (keys %{$q}) ? 1 : 0;
 	
 	return $results;
-}
-
-sub get_md5 {
-	# get_md5($string) -- returns MD5 based on $string
-	my $string = shift;
-	my $results;
-	
-	$results = Digest::MD5::md5_hex($string);
-	
-	return $results;
-}
-
-sub create_db {
-    # create_db($name) - creates a blank database ($name), returns 0 or an error message
-    my $name = shift @_;
-    my $results = 0;
-    
-    # need to open a db and create the default schema
-    # default schema is:
-    # CREATE TABLE tbl_main (url TEXT PRIMARY KEY, status_code TEXT, size NUMERIC, links TEXT)
-    my @tables = ('tbl_movies', 'tbl_tv');
-    
-    my $dbh = DBI->connect("dbi:SQLite:$name") or $results = $DBI::errstr;
-    
-    if ($results) { 
-    	warn "WARN:: unable to open db '$name', bailing out of this function";
-    	
-    	# this falls through to the default 'return' statement
-    	
-    } else {
-    	# so far so good
-    	
-	foreach my $tbl_name (@tables) {
-		my $schema;
-		
-		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
-		$schema = 'uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT'         if $tbl_name eq 'tbl_movies';
-		$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT'  if $tbl_name eq 'tbl_tv';
-		next unless $schema; # failsafe
-	
-		my $query = $dbh->prepare(
-		    "CREATE TABLE $tbl_name ($schema)"
-		);
-	    
-		# ok, now to actually run the SQL
-		eval {
-		    $query->execute;
-		    
-		    # since this is a 'CREATE' statement, it doesn't have a necessary return value. add one for error checking in the future
-		};
-		
-		if ($@) { 
-		    warn "WARN:: error while creating default schema: $@";
-		    return $results;
-		}
-		
-		
-	}    	
-    }
-    
-    return $results;
 }
