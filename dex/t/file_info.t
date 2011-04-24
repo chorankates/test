@@ -20,6 +20,8 @@ my %static_names = (
     'Burn Notice - 02 - 14 - This Episode Name has a - in it' => '/media/pdisk1/tv/Burn Notice/Burn Notice - Season 01/',
     'Foo - Bar', => '/media/pdisk1/tv/Foo/',
     'Archer - 04 - Not enough information' => '/media/pdisk1/tv/Archer/Archer - Season 02/',
+    '24 - 07 - 24 - 7 a.m. - 8 a.m..avi' => '/media/pdisk1/tv/24/24 - Season 07/24 - 07 - 24 - 7 a.m. - 8 a.m..avi', # we can fix this by using @a[3...] as $episode_title
+    'The X-Files - 04 - 05 - This is a test.avi' => '/media/pdisk1/tv/The X-Files/The X-Files - Season 04/', # we can fix this one by saying that $show is based on the foldername off of the root and stripping that out of the match text
 );
 
 my %names;
