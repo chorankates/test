@@ -131,12 +131,15 @@ print "  done indexing media, found ", scalar keys %files, " files, took ", time
 
 ## find out which ones are new and add them to the db
 my @lt_find_new_files_begin = localtime;
-my ($added, $processed) = (0, 0);
+my ($added, $processed, $size_total, $size_added) = (0, 0);
 print "> adding new media to the db:\n" if $s{verbose} ge 1;
 foreach my $ffp (keys %files) {
 	$processed++;
 	my $file = $files{$ffp}{basename};
 	my $type = $files{$ffp}{type};
+	my $size = $files{$ffp}{size};
+	
+	$size_total += $size;
 	
 	#this verbosity is wonky.. need to fix it, until then, stick with verbose=2 or 0
 	print "  $processed ::  processing '$file'.." if $s{verbose} ge 2;
@@ -150,6 +153,7 @@ foreach my $ffp (keys %files) {
 		print " " x (90 - length($file)), "unknown MD5, adding\n" if $s{verbose} ge 1;
 	}
 	
+	$size_added += $size;
 	
 	
 	# should have a $processed/$total print out here.. every 10%?
@@ -166,6 +170,14 @@ foreach my $ffp (keys %files) {
 }
 my @lt_find_new_files_end = localtime;
 print "  done adding, found/added $added new files, took ", timetaken(\@lt_find_new_files_begin, \@lt_find_new_files_end), "\n" if $s{verbose} ge 1;
+
+## update tbl_stats here
+# update total number of files
+# update number of tv shows
+# update number of movies
+# update size of collection
+# updated latest added size
+# etc
 
 # synergyc 192.168.1.122
 
@@ -196,6 +208,7 @@ sub crawl_dir {
 
 			$h{$file}{type}     = $type;
 			$h{$file}{basename} = $basename;
+			$h{$file}{size}     = (stat($ffp))[7];
 			$added++;
 		},
 		$dir
