@@ -4,7 +4,7 @@
 ## schema notes:
 # tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT
 #                42242243,              Psych,      04,                14          Think Tank,   unknown,   none,       2011/04/01, 2010/01/02,  /media/pdisk1/tv/Psych/Psych - Season 04/Psych - 04 - 14 - Think Tank.avi
-# movies:   uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT
+# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, relpath TEXT
 
 # TODO
 ## write generic SQL read/write functions
@@ -75,7 +75,7 @@ unless (-d $s{image_dir}) {
 }
 
 unless (-f $s{database}) {
-	my $results = create_db($s{database});
+	my $results = dex::util::create_db($s{database});
 	if ($results) {
 		warn "WARN:: unable to locate OR create '$s{database}': $results";
 		exit 1;
@@ -120,8 +120,6 @@ foreach my $ffp (keys %files) {
 	$processed++;
 	my $file = $files{$ffp}{basename};
 	my $type = $files{$ffp}{type};
-	
-	next if $type =~ /movies/;
 	
 	print "$processed ::  processing '$file'.." if $s{verbose} ge 2;
 	
@@ -234,7 +232,6 @@ sub put_sql {
 	if ($type =~ /tv/) {
 		$table = 'tbl_tv';
 		
-		# need to check to see if this is already in the DB -- not at this tim, already ran a check
 		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT
 		$query = $dbh->prepare("
 					INSERT
@@ -247,13 +244,12 @@ sub put_sql {
 	} elsif ($type =~ /movie/) {
 		$table = 'tbl_movies';
 		
-		# need to check to make sure this isn't already in the DB
-		
-		return 2; # for now
-		
-		$query = $dbh->prepare("
+		# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, relpath TEXT
+		$query = $dbh->prepare("INSERT
+				       INTO $table
+				       (uid, title, director, actors, genre, notes, imdb, cover, added, released, relpath)
+				       VALUES ('$h{uid}', '$h{title}', '$h{director}', '$h{actors}', '$h{genre}', '$h{notes}', '$h{imdb}', '$h{cover}', '$h{added}', '$h{released}', '$h{relpath}')
 							   ");
-		
 		
 	} else {
 		warn "WARN:: unknown type '$type'";
@@ -295,8 +291,8 @@ sub get_sql {
 	
 	my $q = $query->execute;
 	
-	# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT
-	# movies:   uid TEXT PRIMARY KEY, title TEXT, show TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT
+	# tv: 	  uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT
+	# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, relpath TEXT
 	
 	while (my @r = $query->fetchrow_array()) {
 		if ($type =~ /tv/) {
@@ -313,17 +309,17 @@ sub get_sql {
 
 			
 		} else {
-			# movies
 			my $u = $r[0];
 			$h{$u}{title}    = $r[1];
-			$h{$u}{added}    = $r[2];
-			$h{$u}{released} = $r[3];
-			$h{$u}{imdb}     = $r[4];
-			$h{$u}{cover}    = $r[5];
-			$h{$u}{director} = $r[6];
-			$h{$u}{actors}   = $r[7];
-			$h{$u}{genre}    = $r[8];
-			$h{$u}{notes}    = $r[9];			
+			$h{$u}{director} = $r[2];
+			$h{$u}{actors}   = $r[3];
+			$h{$u}{genre}    = $r[4];
+			$h{$u}{notes}    = $r[5];			
+			$h{$u}{imdb}     = $r[6];
+			$h{$u}{cover}    = $r[7];
+			$h{$u}{added}    = $r[8];
+			$h{$u}{released} = $r[9];
+			$h{$u}{relpath}  = $r[10];
 		}
 	}
 	

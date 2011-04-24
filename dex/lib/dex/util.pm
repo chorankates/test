@@ -11,8 +11,15 @@ our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(log_error create_db nicetime);
 our @EXPORT = qw(get_info_from_filename  get_md5);
 
+# this will be used as an output for error_log()
 %CFG::log = (
     error_file => "dex-crawl_error." . time . ".log",
+);
+
+# this should be kept in sync with dex-crawl.pl's $s{dir}, but in reality, should remain fairly static
+%CFG::sources = (
+		tv 	=> [ '/media/pdisk1/tv/', ],
+		movies	=> [ '/media/pdisk2/movies/', ],
 );
 
 sub get_info_from_filename {
@@ -34,14 +41,24 @@ sub get_info_from_filename {
 	my $atime = nicetime(\@lt, "both"); # will be adding this to the db as well for future additions
 	$h{ctime} = $ctime; # not currently in the schema
 	$h{added} = $atime; # added time
-	$h{relpath} = $ffp;
+	$h{uid}      = get_md5($file); # this is an MD5 of the filename, not the file
+	$h{notes} = '';
+	
+	# this is kind of cheating..
+	my $tmp_ffp = $ffp;
+	my $rel_str = join("|", @{$CFG::sources{$type}});
+	$tmp_ffp =~ s/\Q$rel_str//;
+	$h{relpath} = $tmp_ffp;
+
 	
 	if ($type =~ /movie/i) {
+		# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, relpath TEXT
 		# Megamind (2010).avi
 		
 		my $title = $1 if $ffp =~ /.*\/(.*)\..*?$/;
-		my $year  = $2 if $ffp =~ /.*\/(.*?)\s?\((.*?\))\..*?$/;
+		my $year  = $2 if $ffp =~ /.*\/(.*?)\s?\((.*?)\)\..*?$/;
 		
+		$title =~ s/\s*\($year\)// if defined $year; # strip out ' ($year)'
 		$year = 'unknown' unless defined $year;
 		
 		unless ($title and $year) {
@@ -52,7 +69,15 @@ sub get_info_from_filename {
 		}
 		
 		$h{title} = $title;
-		$h{year}  = $year;
+		$h{released}  = $year;
+		
+		$h{cover} = 'unknown';
+		$h{imdb}  = ''; # generate this here
+		$h{genre} = 'unknown'; # for now, we'll parse this via the imdb address later
+		$h{actors} = 'unknown'; # again, for now
+		$h{director} = 'unknown';
+	
+		# tv returns on its own, but we rely on a fall through return.. why?
 		
 	} elsif ($type =~ /tv/i) {
 		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
@@ -66,10 +91,8 @@ sub get_info_from_filename {
 			return %h;
 		}
 		
-		$h{uid}      = get_md5($file); # this is an MD5 of the filename, not the file
 		$h{released} = 'unknown'; # don't currently have a good way of pulling this
 		$h{genre}    = 'unknown';
-		$h{notes}    = '';
 		
 		# why are we always getting 'n' when '0n' is passed in?
 		
@@ -196,8 +219,8 @@ sub create_db {
 		my $schema;
 		
 		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
-		$schema = 'uid TEXT PRIMARY KEY, title TEXT, added TEXT, released TEXT, imdb TEXT, cover TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT'         if $tbl_name eq 'tbl_movies';
-		$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT'  if $tbl_name eq 'tbl_tv';
+		$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, relpath TEXT' if $tbl_name eq 'tbl_movies';
+		$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT'        if $tbl_name eq 'tbl_tv';
 		next unless $schema; # failsafe
 	
 		my $query = $dbh->prepare(
