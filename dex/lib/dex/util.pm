@@ -44,15 +44,17 @@ sub get_info_from_filename {
 	$h{uid}      = get_md5($file); # this is an MD5 of the filename, not the file
 	$h{notes} = '';
 	
-	# this is kind of cheating..
+	# this is kind of cheating.. and we're not using this in the schema (for now)
 	my $tmp_ffp = $ffp;
 	my $rel_str = join("|", @{$CFG::sources{$type}});
 	$tmp_ffp =~ s/\Q$rel_str//;
 	$h{relpath} = $tmp_ffp;
+	
+	$h{ffp} = $ffp;
 
 	
 	if ($type =~ /movie/i) {
-		# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, relpath TEXT
+		# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
 		# Megamind (2010).avi
 		
 		my $title = $1 if $ffp =~ /.*\/(.*)\..*?$/;
@@ -219,8 +221,8 @@ sub create_db {
 		my $schema;
 		
 		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
-		$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, relpath TEXT' if $tbl_name eq 'tbl_movies';
-		$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, relpath TEXT'        if $tbl_name eq 'tbl_tv';
+		$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_movies';
+		$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT'        if $tbl_name eq 'tbl_tv';
 		next unless $schema; # failsafe
 	
 		my $query = $dbh->prepare(
