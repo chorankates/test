@@ -205,7 +205,7 @@ sub create_db {
     # need to open a db and create the default schema
     # default schema is:
     # CREATE TABLE tbl_main (url TEXT PRIMARY KEY, status_code TEXT, size NUMERIC, links TEXT)
-    my @tables = ('tbl_movies', 'tbl_tv');
+    my @tables = ('tbl_movies', 'tbl_tv', 'tbl_stats');
     
     my $dbh = DBI->connect("dbi:SQLite:$name") or $results = $DBI::errstr;
     
@@ -223,6 +223,7 @@ sub create_db {
 		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
 		$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_movies';
 		$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT'        if $tbl_name eq 'tbl_tv';
+		$schema = 'uid TEXT PRIMARY KEY, name TEXT, value TEXT' if $tbl_name eq 'tbl_stats';
 		next unless $schema; # failsafe
 	
 		my $query = $dbh->prepare(
