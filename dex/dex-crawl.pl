@@ -35,9 +35,9 @@ use Storable;
 my (%f, %files, %s); # flags, results from dir_crawling, settings
 
 %s = (
-    verbose  => 1, # 0 <= n <= 3
-    database => 'dex.sqlite', # this can be overloaded, assume that it exists in $s{working_dir}
-    debug    => 1, # overload the indexing with a storable 
+	verbose  => 1, # 0 <= n <= 3
+	database => 'dex.sqlite', # this can be overloaded, assume that it exists in $s{working_dir}
+	debug    => 1, # overload the indexing with a storable 
 	dbg_storable => 'latest_index.sbl', 
 
 	dir     => {
@@ -67,6 +67,8 @@ GetOptions(\%f, "help", "dir:s", "verbose:i", "database:s", "working_dir:s", "de
 $s{$_} = $f{$_} foreach (keys %f);
 $s{image_dir} = File::Spec->catdir($s{working_dir}, "imdb_images");
 
+%dex::util::settings = %s;
+
 my @t1 = localtime;
 print "% $0 started at ", nicetime(\@t1, "time"), "\n" if $s{verbose} ge 1;
 
@@ -74,7 +76,7 @@ if ($s{rescan}) {
 	# delete artifacts and scan from scratch
 	print "> removing artifacts..\n" if $s{verbose} ge 1;
 	unlink ($s{database}) or warn "WARN:: unable to remove $s{database}: $!";
-	unlink ($s{debug}{dbg_storable}) or warn "WARN:: unable to remove $s{debug}{dbg_storable}: $!";
+	unlink ($s{dbg_storable}) or warn "WARN:: unable to remove $s{dbg_storable}: $!";
 }
 
 unless (-d $s{image_dir}) {
@@ -150,7 +152,7 @@ foreach my $ffp (keys %files) {
 		print " " x (90 - length($file)), "already exists, skipping\n" if $s{verbose} ge 2;
 		next;
 	} else {
-		print " " x (90 - length($file)), "unknown MD5, adding\n" if $s{verbose} ge 1;
+		print " " x (90 - length($file)), "unknown MD5, adding\n" if $s{verbose} ge 2;
 	}
 	
 	$size_added += $size;
@@ -171,15 +173,10 @@ foreach my $ffp (keys %files) {
 my @lt_find_new_files_end = localtime;
 print "  done adding, found/added $added new files, took ", timetaken(\@lt_find_new_files_begin, \@lt_find_new_files_end), "\n" if $s{verbose} ge 1;
 
-## update tbl_stats here
-# update total number of files
-# update number of tv shows
-# update number of movies
-# update size of collection
-# updated latest added size
-# etc
+my @tv_files    = grep { $files{$_}{type} eq 'tv' }     keys %files;
+my @movie_files = grep { $files{$_}{type} eq 'movies' } keys %files;
 
-# synergyc 192.168.1.122
+my $stats_results = put_stats($s{database}, $processed, $added, $#tv_files, $#movie_files, $size_total, $size_added);
 
 my @t2 = localtime;
 print "% $0 finished at ", nicetime(\@t2, "time"), " took ", timetaken(\@t1, \@t2), "\n" if $s{verbose} ge 1;
@@ -245,122 +242,6 @@ sub get_imdb {
 	return %h;
 }
 
-sub put_sql {
-	# put_sql($database, $type, $href)  -- takes a hash of data and adds it to $database according to $type -- returns 0|1|2 for success|already known|failure
-	my ($database, $type, $href) = @_;
-	my %h = %{$href};
-	my $results = 0;
-	my $table;
-	my $query;
-	
-	## cleanup for SQL
-	foreach my $key (keys %h) {
-		$h{$key} =~ s/'/^/g; # changed from " to ^ so that we can easily convert backwards
-	}
-	
-	return 2 unless -f $database;
-	
-	my $dbh = DBI->connect("dbi:SQLite:$database") or warn "WARN:: unable to connect to '$database': $DBI::errstr" and return 2;
-	
-	if ($type =~ /tv/) {
-		$table = 'tbl_tv';
-		
-		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT
-		$query = $dbh->prepare("
-					INSERT
-					INTO $table
-					(uid, show, season, episode, title, genre, notes, added, released, ffp)
-					VALUES ('$h{uid}', '$h{show}', '$h{season}', '$h{episode}', '$h{title}', '$h{genre}', '$h{notes}', '$h{added}', '$h{released}', '$h{ffp}')
-					");
-
-		
-	} elsif ($type =~ /movie/) {
-		$table = 'tbl_movies';
-		
-		# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
-		$query = $dbh->prepare("INSERT
-				       INTO $table
-				       (uid, title, director, actors, genre, notes, imdb, cover, added, released, ffp)
-				       VALUES ('$h{uid}', '$h{title}', '$h{director}', '$h{actors}', '$h{genre}', '$h{notes}', '$h{imdb}', '$h{cover}', '$h{added}', '$h{released}', '$h{ffp}')
-							   ");
-		
-	} else {
-		warn "WARN:: unknown type '$type'";
-		return 2;
-	}
-	
-	my $qresults;
-
-	eval {
-		$qresults = $query->execute;
-	};
-	
-	if ($@) {
-		$results = 2;
-		warn "WARN:: unable to add entry: $DBI::errstr";
-	}
-	
-	$dbh->disconnect;
-	
-	return $results;
-}
-
-sub get_sql {
-	# get_sql($database, $sql, $type) -- returns a href of data corresponding to $sql in $database
-	my ($database, $sql, $type) = @_; # type = tv/movies
-	my %h;
-	
-	my $dbh = DBI->connect("dbi:SQLite:$database");
-	unless ($dbh) {
-		warn "WARN:: unable to connect to '$database': $DBI::errstr";
-		return undef;
-	}
-	
-	my $query = $dbh->prepare($sql);
-	unless ($query) {
-		warn "WARN:: unable to prepare '$sql': $DBI::errstr";
-		return undef;
-	}
-	
-	my $q = $query->execute;
-	
-	# tv: 	  uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT
-	# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
-	
-	while (my @r = $query->fetchrow_array()) {
-		if ($type =~ /tv/) {
-			my $u = $r[0];
-			$h{$u}{show}     = $r[1];
-			$h{$u}{season}   = $r[2];
-			$h{$u}{episode}  = $r[3];
-			$h{$u}{title}    = $r[4];
-			$h{$u}{genre}    = $r[5];
-			$h{$u}{notes}    = $r[6];
-			$h{$u}{added}    = $r[7];
-			$h{$u}{released} = $r[8];
-			$h{$u}{ffp}      = $r[9];
-
-			
-		} else {
-			my $u = $r[0];
-			$h{$u}{title}    = $r[1];
-			$h{$u}{director} = $r[2];
-			$h{$u}{actors}   = $r[3];
-			$h{$u}{genre}    = $r[4];
-			$h{$u}{notes}    = $r[5];			
-			$h{$u}{imdb}     = $r[6];
-			$h{$u}{cover}    = $r[7];
-			$h{$u}{added}    = $r[8];
-			$h{$u}{released} = $r[9];
-			$h{$u}{ffp}      = $r[10];
-		}
-	}
-	
-	$dbh->disconnect;
-	
-	return \%h;
-}
-
 sub already_added {
 	# already_added($database, $md5, $type) -- does a quick check to determine if the $md5 passed is already in the $database -- returns 0|1 for no|yes
 	my ($database, $md5, $type) = @_;
@@ -369,11 +250,14 @@ sub already_added {
 	# we should check to see if the folder path has changed, and if so, delete the current entry
 	
 	my $table = $s{table}{$type};
-	my $sql   = "SELECT * from $table WHERE UID == \"$md5\""; # don't really need the whole match, but get_sql() freaks out if not
+	#my $sql   = "SELECT * from $table WHERE UID == \"$md5\""; # don't really need the whole match, but get_sql() freaks out if not
+	my $addl_sql = "WHERE UID == \"$md5\"";
 	
-	my $q = get_sql($database, $sql, $type);
+	#my $q = get_sql($database, $sql, $type);
+	my ($q, $count) = get_sql($database, $type, $addl_sql);
 	
-	$results = (keys %{$q}) ? 1 : 0;
+	#$results = (keys %{$q}) ? 1 : 0;
+	$results = $count;
 	
 	return $results;
 }
@@ -441,4 +325,48 @@ sub remove_non_existent_entries {
 	$dbh->disconnect;	
 	
 	return 0;
+}
+
+sub put_stats {
+	# put_stats() - returns 0|1 based on SQL update results
+	#my $stats_results = put_stats($processed, $added, $#tv_files, $#movie_files, $size_total, $size_added);
+	my ($database, $files_found, $files_added_in_last_run, $files_tv_count, $files_movie_count, $files_size_total, $files_size_added) = @_;
+	my $results = 0;
+	
+	my $table = 'tbl_stats';
+	
+	my $dbh = DBI->connect("dbi:SQLite:$database");
+	unless ($dbh) {
+		warn "WARN:: unable to connect to '$database': $DBI::errstr";
+		return 1;
+	}
+	
+	# $schema = 'uid TEXT PRIMARY KEY, name TEXT, value TEXT' if $tbl_name eq 'tbl_stats';
+	my %stats = (
+		files_found             => $files_found,
+		files_added_in_last_run => $files_added_in_last_run,
+		files_tv_count          => $files_tv_count,
+		files_movie_count       => $files_movie_count,
+		files_size_total        => nicesize($files_size_total),
+		files_size_added        => nicesize($files_size_added),
+	);
+	
+	foreach my $name (keys %stats) {
+		my $value = $stats{$name};
+		
+		my $sql = "UPDATE $table SET value='$value' WHERE name='$name'";
+		
+		my $query = $dbh->prepare($sql);
+		unless ($query) {
+			warn "WARN:: unable to prepare '$sql': $DBI::errstr";
+			return 1;
+		}
+		
+		my $q = $query->execute;	
+		
+	}
+	
+	$dbh->disconnect;
+	
+	return $results;
 }
