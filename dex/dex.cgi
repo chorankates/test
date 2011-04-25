@@ -1,6 +1,12 @@
 #!/usr/bin/perl -w
 ## dex.cgi -- web interface for dex (influenced by dico)
 
+# todo
+# need to hook up search buttons (really just start writing the functions other than the landing page)
+#  search results -- multiple
+#  details page -- individual
+# need to add controls to force a new scan
+
 use strict;
 use warnings;
 use 5.010;
@@ -12,6 +18,9 @@ use Time::HiRes;
 
 use lib '/home/conor/Dropbox/perl/_pm';
 use ironhide;
+
+use lib '/home/conor/git/test/dex/lib';
+use dex::util;
 
 my $time_start = Time::HiRes::gettimeofday();
 
@@ -63,6 +72,13 @@ unless (param()) {
     #print_table(10); # this is in flux
     #print "&nbsp;" x 10 . "<a href='" . $s{host} . "/cgi-bin/dico-wrapper.pl?function=query&builtin=most-recent&ceiling=100&use_ceiling=on&use_builtin=on'>100 more recent additions</a>..";
     
+    print "<br>";
+    my $recent_sql = 'ORDER BY show DESC LIMIT 10';
+    print h2("sample sql: " . $recent_sql);
+    
+    # get the last ten tv entries
+    print get_table_for_printing($s{db}, 'tv', 'multiple', $recent_sql);
+    
     print get_query_control();
     # end up for parameter page
     
@@ -86,9 +102,9 @@ unless (param()) {
 my $time_finish = Time::HiRes::gettimeofday();
 # end up
 print(
-    "<br><br><br>rendered in " . substr(($time_finish - $time_start), 0, 5) . "s\n",
     "<br><br>",
     "back to <a href=\"/cgi-bin/dex.cgi\">launcher</a><br>",
+    "<br><br>rendered in " . substr(($time_finish - $time_start), 0, 5) . "s\n",
     #"back to <a href=\"/index.html\">index.html</a><br>",
     end_html()
     );
@@ -131,9 +147,10 @@ sub cronread {
         # 0 0 * * 0 conor diff -r -x *.jpg ~/Dropbox/perl ~/git/perl
         my $cmd;
         if ($_ =~ /.\s+.\s+.\s+.\s+.\s+(.*)/) {
-	    $cmd = $1; # grabbed from the regex
+            # $cmd = $1; # grabbed from the regex
+            $cmd = $_; # let's take the whole line actually
             push @results, $cmd;
-	}
+        }
     }
     close($fh);
     
@@ -183,31 +200,91 @@ sub err {
     return @return
 }
 
+sub get_table_for_printing {
+    # get_table_for_printing($database, $type, $mode, $addl_sql) - returns a string of a complete HTML table or throws an error
+    my ($database, $type, $mode, $addl_sql) = @_;
+    $addl_sql = '' unless defined $addl_sql;
+    my $html;
+    
+    my ($href, $count); # will contain the results of a SQL query
+    my %hash; # i don't like refs
+    
+    if ($type =~ /tv/) {
+        ($href, $count) = get_sql($database, 'tv', $addl_sql);
+    } elsif ($type =~ /movies/) {
+        ($href, $count) = get_sql($database, 'movies', $addl_sql);
+    } elsif ($type =~ /stats/) {
+        ($href, $count) = get_sql($database, 'stats');
+    }
+    
+    %hash = %{$href};
+    $count = 0;
+    my @table = ("<table border=0 width='80%'>"); 
+    foreach (sort keys %hash) {
+        my $uid = $_;
+        my $str;
+        
+        if ($type =~ /tv/) {
+            #get_table_for_printing($s{db}, 'tv', 'multiple', 'ORDER BY added ASC LIMIT 10');
+            if ($mode eq 'multiple') {
+                # returns a vertical table with a limited number of attributes for each match
+                my %lh = %{$hash{$uid}};
+                # tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
+                $str = "<tr><td><strong>show</strong></td><td><strong>season #</strong></td><td><strong>episode #</strong></td><td><strong>title</strong></td><td><strong>released</strong></td></tr>\n" if $count == 0;
+                $str .= "<tr><td>$lh{show}</td><td>$lh{season}</td><td>$lh{episode}</td><td>$lh{title}</td><td>$lh{released}</td></tr>";
+                
+                print "DBGZ" if 0;
+                
+            } elsif ($mode eq 'single') {
+                # this returns a horizontal based table containing all values in the hash, suitable for individual pages, but still supports being called multiple times
+                unless (ref $hash{$uid}) {
+                    warn "WARN:: weird datatype";
+                    next;
+                }
+                my %lh = %{$hash{$uid}};
+                
+                
+                $str = "<tr><td><strong>attribute</strong></td><td><strong>value</strong></td></tr>\n
+                <tr><td></td><td></td></tr>\n
+
+                
+                ";
+                
+                #$str .= "<tr><td>$_</td><td>$hash{$_}</td></tr>" foreach keys 
+                
+                print "DBGZ" if 0;
+            }
+            
+        } elsif ($type =~ /movies/) {
+            
+            print "DBGZ" if 0;
+            
+        } elsif ($type =~ /stats/) {
+            my $title = $_;
+            my $value = $hash{$title};
+            $str = "<tr><td width='60%'>$title</td><td>$value</td></tr>";
+        }
+        
+        push @table, $str;
+        $count++;
+    }
+    
+    push @table, "</table>";
+    $html .= join("\n", @table);
+    
+    return $html;
+}
+
 sub get_stats_div {
     # get_stats_div() - returns an HTML string for the <div> containing statistics
     my $html;
-    
-    my %hash = get_sql($s{db}, 'stats');
-    my @stats_table = ("<table border=0>");
+
     
     $html = "<div class='floater'>";
     
-    
-    foreach (sort keys %hash) {
-        my $title = $_;
-        my $value = $hash{$title};
-        
-        
-        my $str = "<tr><td width='60%' align='left'>$title</td><td>$value</td></tr>";
-        push @stats_table, $str;
-    }
-    
-    push @stats_table, "</table>";
-    $html .= join("\n", @stats_table);
+    $html .= get_table_for_printing($s{db}, 'stats');
     
     $html .= "</div>";
-    
-    
     
     return $html;
 }
@@ -225,7 +302,7 @@ sub get_query_control {
         
         "<strong>tv</strong>",
         "<table border='1' width='50%'>\n",
-        "<tr><td><strong>setting</strong></td><td><strong>value</strong></td><td><strong>use</strong></td></tr>\n",
+        "<tr><td><strong>attribute</strong></td><td><strong>value</strong></td><td><strong>use</strong></td></tr>\n",
         "<input type='hidden' name='type' value='tv'>\n",
         "<tr><td>show title</td><td><input name='show'></td><td><input type='checkbox' name='use_show'></td></tr>\n",
         "<tr><td>season #</td><td>", get_select('season'), "</td><td><input type='checkbox' name='use_season'></td></tr>\n",
@@ -240,7 +317,7 @@ sub get_query_control {
         
         "<strong>movies</strong>\n",
         "<table border='1' width='50%'>\n",
-        "<tr><td><strong>setting</strong></td><td><strong>value</strong></td><td><strong>use</strong></td></tr>\n",
+        "<tr><td><strong>attribute</strong></td><td><strong>value</strong></td><td><strong>use</strong></td></tr>\n",
         "<input type='hidden' name='type' value='movies'>\n",
         "<tr><td>movie title</td><td><input name='title'></td><td><input type='checkbox' name='use_title'></td></tr>\n",
         "<tr><td>director</td><td><input name='director'></td><td><input type='checkbox' name='use_director'></td></tr>\n",
@@ -315,26 +392,3 @@ sub get_select {
     return $html;
 }
 
-sub get_sql {
-    # get_sql($database, $type, $)
-    my $database = shift;
-    my $type = shift;
-    
-    my %h;
-    
-    if ($type =~ /stats/) {
-        
-        %h = (
-            files_count_total  => '100,000',
-            files_count_tv     => '99,000',
-            files_count_movies => '1,000',
-            files_size_total   => '3 tb',
-            files_size_new     => '100 mb',
-        );
-        
-    } else {
-        warn "this is fuzzed for now";
-    }
-    
-    return %h;
-}
