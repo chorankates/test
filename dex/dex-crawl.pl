@@ -7,9 +7,9 @@
 # movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
 
 # TODO
-## write generic SQL read/write functions
-## write function to return as much information (that will be written to sql) based on filename
 ## write function to query IMDB and return the information needed
+## port put_stats() to dex::util::put_sql()
+## move remove_non_existent_files() to dex::util
 
 use strict;
 use warnings;
