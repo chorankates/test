@@ -9,7 +9,10 @@ use File::Basename;
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(log_error create_db nicetime);
-our @EXPORT = qw(get_info_from_filename  get_md5);
+our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql);
+
+# todo
+# start passing in \%s wfrom dex-crawl.pl / dex.cgi with all calls to properly access table names -- try looking in %dex::util::settings
 
 # this will be used as an output for error_log()
 %CFG::log = (
@@ -62,6 +65,13 @@ sub get_info_from_filename {
 		
 		$title =~ s/\s*\($year\)// if defined $year; # strip out ' ($year)'
 		$year = 'unknown' unless defined $year;
+		
+		if ($title =~ /\[|\]/) {
+			$h{error} = "bad characters found: $ffp";
+			log_error($h{error});
+			
+			return %h;
+		}
 		
 		unless ($title and $year) {
 			$h{error} = "unrecognized filename format: $ffp";
@@ -197,11 +207,173 @@ sub get_md5 {
 	return $results;
 }
 
+sub get_sql {
+    # get_sql($database, $type, $addl_sql) - returns (\%hash, $match_count) containing database matches
+    my $database = shift;
+    my $type = shift;
+    
+    # addl_sql will be appended to the SELECT * enforced -- ex: WHERE id == "foo"
+    my $addl_sql = shift;
+    
+    my %h;
+
+    my ($dbh, $sql, $query, $q, $table);
+    
+    $dbh = DBI->connect("dbi:SQLite:$database");
+    unless ($dbh) {
+        warn "WARN:: unable to connect to '$database': $DBI::errstr";
+        return 1;
+    }
+    
+    
+    if ($type eq 'stats') {
+        $table = 'tbl_stats';
+        $sql = "SELECT * FROM $table";
+    } elsif ($type eq 'tv') {
+        $table = 'tbl_tv';
+        $sql = "SELECT * FROM $table";
+        
+    } elsif ($type eq 'movies') {
+        $table = 'tbl_movies';
+        $sql = "SELECT * FROM $table";
+        
+    } else {
+        err("trying to get_sql on an unknown type: $type");
+    }
+    
+	$sql .= " $addl_sql" if defined $addl_sql; # herp
+	
+    
+    
+	eval {
+		$query = $dbh->prepare($sql);
+		$q     = $query->execute;
+	};
+	
+	if ($@) {
+		warn "WARN:: sql '$sql' failed: $@";
+		return (\%h, -1);
+	}
+	
+    
+    ## handle the different data structures
+    my $match_count = 0;
+    while (my @r = $query->fetchrow_array()) {
+        $match_count++;
+        if ($type =~ /stats/) {
+			# $schema = 'uid TEXT PRIMARY KEY, name TEXT, value TEXT' if $tbl_name eq 'tbl_stats';
+            my $uid   = $r[0];
+            my $name  = $r[1];
+            my $value = $r[2];
+            
+            $h{$name} = $value; # this hash is special
+            
+        } elsif ($type eq 'tv') {
+            # $schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT'        if $tbl_name eq 'tbl_tv';
+			my $u = $r[0];
+			$h{$u}{show}     = $r[1];
+			$h{$u}{season}   = $r[2];
+			$h{$u}{episode}  = $r[3];
+			$h{$u}{title}    = $r[4];
+			$h{$u}{genre}    = $r[5];
+			$h{$u}{notes}    = $r[6];
+			$h{$u}{added}    = $r[7];
+			$h{$u}{released} = $r[8];
+			$h{$u}{ffp}      = $r[9];
+
+		} elsif ($type eq 'movies') {
+            # $schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_movies';
+            my $u = $r[0];
+			$h{$u}{title}    = $r[1];
+			$h{$u}{director} = $r[2];
+			$h{$u}{actors}   = $r[3];
+			$h{$u}{genre}    = $r[4];
+			$h{$u}{notes}    = $r[5];			
+			$h{$u}{imdb}     = $r[6];
+			$h{$u}{cover}    = $r[7];
+			$h{$u}{added}    = $r[8];
+			$h{$u}{released} = $r[9];
+			$h{$u}{ffp}      = $r[10];
+
+            
+        } else {
+            err("trying to get_sql on an unknown type: $type");
+        }
+    }
+    
+    $dbh->disconnect;
+    
+    return (\%h, $match_count);
+}
+
+sub put_sql {
+	# put_sql($database, $type, $href)  -- takes a hash of data and adds it to $database according to $type -- returns 0|1|2 for success|already known|failure
+	my ($database, $type, $href) = @_;
+	my %h = %{$href};
+	my $results = 0;
+	my $table;
+	my $query;
+	
+	## cleanup for SQL
+	foreach my $key (keys %h) {
+		$h{$key} =~ s/'/^/g; # changed from " to ^ so that we can easily convert backwards
+	}
+	
+	return 2 unless -f $database;
+	
+	my $dbh = DBI->connect("dbi:SQLite:$database") or warn "WARN:: unable to connect to '$database': $DBI::errstr" and return 2;
+	
+	if ($type =~ /tv/) {
+		$table = 'tbl_tv';
+		
+		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT
+		$query = $dbh->prepare("
+					INSERT
+					INTO $table
+					(uid, show, season, episode, title, genre, notes, added, released, ffp)
+					VALUES ('$h{uid}', '$h{show}', '$h{season}', '$h{episode}', '$h{title}', '$h{genre}', '$h{notes}', '$h{added}', '$h{released}', '$h{ffp}')
+					");
+
+		
+	} elsif ($type =~ /movie/) {
+		$table = 'tbl_movies';
+		
+		# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
+		$query = $dbh->prepare("INSERT
+				       INTO $table
+				       (uid, title, director, actors, genre, notes, imdb, cover, added, released, ffp)
+				       VALUES ('$h{uid}', '$h{title}', '$h{director}', '$h{actors}', '$h{genre}', '$h{notes}', '$h{imdb}', '$h{cover}', '$h{added}', '$h{released}', '$h{ffp}')
+							   ");
+		
+	} else {
+		warn "WARN:: unknown type '$type'";
+		return 2;
+	}
+	
+	my $qresults;
+
+	eval {
+		$qresults = $query->execute;
+	};
+	
+	if ($@) {
+		$results = 2;
+		warn "WARN:: unable to add entry: $DBI::errstr";
+	}
+	
+	$dbh->disconnect;
+	
+	return $results;
+}
+
+
 sub create_db {
     # create_db($name) - creates a blank database ($name), returns 0 or an error message
     my $name = shift @_;
     my $results = 0;
     
+	print "DBGZ" if 0;
+	
     # need to open a db and create the default schema
     # default schema is:
     # CREATE TABLE tbl_main (url TEXT PRIMARY KEY, status_code TEXT, size NUMERIC, links TEXT)
@@ -217,33 +389,61 @@ sub create_db {
     } else {
     	# so far so good
     	
-	foreach my $tbl_name (@tables) {
-		my $schema;
+		foreach my $tbl_name (@tables) {
+			my $schema;
+			
+			# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
+			$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_movies';
+			$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT'        if $tbl_name eq 'tbl_tv';
+			$schema = 'uid TEXT PRIMARY KEY, name TEXT, value TEXT' if $tbl_name eq 'tbl_stats';
+			next unless $schema; # failsafe
 		
-		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
-		$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_movies';
-		$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT'        if $tbl_name eq 'tbl_tv';
-		$schema = 'uid TEXT PRIMARY KEY, name TEXT, value TEXT' if $tbl_name eq 'tbl_stats';
-		next unless $schema; # failsafe
-	
-		my $query = $dbh->prepare(
-		    "CREATE TABLE $tbl_name ($schema)"
-		);
-	    
-		# ok, now to actually run the SQL
-		eval {
-		    $query->execute;
-		    
-		    # since this is a 'CREATE' statement, it doesn't have a necessary return value. add one for error checking in the future
-		};
+			my $query = $dbh->prepare(
+				"CREATE TABLE $tbl_name ($schema)"
+			);
+			
+			# ok, now to actually run the SQL
+			eval {
+				$query->execute;
+				
+				# since this is a 'CREATE' statement, it doesn't have a necessary return value. add one for error checking in the future
+			};
+			
+			if ($@) { 
+				warn "WARN:: error while creating default schema: $@";
+				return $results;
+			}
+			
+			my %h;
+			if ($tbl_name =~ /tbl_stats/) {
+				# in order to use 'UPDATE' in update_stats(), need to set default values for tbl_stats
+				my @names = ('files_found', 'files_added_in_last_run', 'files_tv_count', 'files_movie_count', 'files_size_total', 'files_size_added');
+				
+				foreach my $name (@names) {
+					$h{uid}   = get_md5($name);
+					$h{name}  = $name;
+					$h{value} = 0;
+				
+					my $sql = "INSERT INTO $tbl_name (uid, name, value) VALUES ('$h{uid}', '$h{name}', '$h{value}')";
+					my $query = $dbh->prepare($sql);
+					
+					eval {
+						$query->execute;
+					};
+					
+					if ($@) {
+						warn "WARN:: error while setting default stats: $@";
+						return $results;
+					}
+				
+				}
+				# end of tbl_stats updates
+			}
 		
-		if ($@) { 
-		    warn "WARN:: error while creating default schema: $@";
-		    return $results;
+		# end of tbl_* creation
 		}
 		
-		
-	}    	
+		# end of if-else -- over commented, but there are an awful lot of closing braces round these parts
     }
     
     return $results;
