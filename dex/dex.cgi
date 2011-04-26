@@ -3,9 +3,10 @@
 
 # todo
 # need to hook up search buttons (really just start writing the functions other than the landing page)
-#  search results -- multiple
 #  details page -- individual
 # need to add controls to force a new scan
+# need to turn table values in get_table_for_printing() into links to run searches on the same criteria
+# need to convert the single mode in get_table_for_printing() to be able to handle inline editing
 
 use strict;
 use warnings;
@@ -35,7 +36,7 @@ my (%d, %p, %s); # database, incoming parameters, settings
     
     function     => (param()) ? "executing function" : "waiting for input",
 
-    
+    results_limit => 500, # puts a hard cap on the number of results returned from any db query (applied after any LIMIT calls)
 );
 
 $s{db} = $s{db_folder} . "dex.sqlite";
@@ -91,11 +92,22 @@ unless (param()) {
    
     dump_hash(\%p, "params"); # not a debug command in this context
     
+    print h2("arrested development (multiple):");
+    print get_table_for_printing($s{db}, 'tv', 'multiple', 'WHERE show LIKE \'%Arrested%\'');
+    
+    print h2("the i.t. crowd - calamity jane (single):");
+    print get_table_for_printing($s{db},'tv', 'single', 'WHERE uid == \'4b8ba2eeccc49252a01776eadbb15422\'');
+    
+    print h2("indiana jones (multiple):");
+    print get_table_for_printing($s{db}, 'movies', 'multiple', 'WHERE title LIKE \'%Indiana Jones%\'');
+    
+    print h2("the usual suspects (single):");
+    print get_table_for_printing($s{db}, 'movies', 'single', 'WHERE uid == \'16153ca725d14826ed3857cf08996121\'');
     
     # sub traffic cop
-    if ($p{function} =~ /query/i) {
+    #if ($p{function} =~ /query/i) {
         
-    }
+    #}
     
 }
 
@@ -218,7 +230,7 @@ sub get_table_for_printing {
     }
     
     %hash = %{$href};
-    $count = 0;
+    my $processed_count = 0;
     my @table = ("<table border=0 width='80%'>"); 
     foreach (sort keys %hash) {
         my $uid = $_;
@@ -230,8 +242,11 @@ sub get_table_for_printing {
                 # returns a vertical table with a limited number of attributes for each match
                 my %lh = %{$hash{$uid}};
                 # tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
-                $str = "<tr><td><strong>show</strong></td><td><strong>season #</strong></td><td><strong>episode #</strong></td><td><strong>title</strong></td><td><strong>released</strong></td></tr>\n" if $count == 0;
-                $str .= "<tr><td>$lh{show}</td><td>$lh{season}</td><td>$lh{episode}</td><td>$lh{title}</td><td>$lh{released}</td></tr>";
+                
+                my $more = ""; # this needs to be a link to this entrys individual page (we know the uid, so just do a type='single' query for uid == \"$md5\")
+                
+                $str = "<tr><td><strong>show</strong></td><td><strong>season #</strong></td><td><strong>episode #</strong></td><td><strong>title</strong></td><td><strong>released</strong></td><td>more</td></tr>\n" if $processed_count == 0;
+                $str .= "<tr><td>$lh{show}</td><td>$lh{season}</td><td>$lh{episode}</td><td>$lh{title}</td><td>$lh{released}</td><td>$more</td></tr>";
                 
                 print "DBGZ" if 0;
                 
@@ -243,21 +258,59 @@ sub get_table_for_printing {
                 }
                 my %lh = %{$hash{$uid}};
                 
-                
                 $str = "<tr><td><strong>attribute</strong></td><td><strong>value</strong></td></tr>\n
-                <tr><td></td><td></td></tr>\n
-
-                
+                <tr><td>uid</td><td>$lh{uid}</td></tr>\n
+                <tr><td>show</td><td>$lh{show}</td></tr>\n
+                <tr><td>season</td><td>$lh{season}</td></tr>\n
+                <tr><td>episode</td><td>$lh{episode}</td></tr>\n
+                <tr><td>title</td><td>$lh{title}</td></tr>\n
+                <tr><td>genre</td><td>$lh{genre}</td></tr>\n
+                <tr><td>notes</td><td>$lh{notes}</td></tr>\n
+                <tr><td>added</td><td>$lh{added}</td></tr>\n
+                <tr><td>released</td><td><$lh{released}/td></tr>\n
+                <tr><td>ffp</td><td><$lh{ffp}/td></tr>\n
                 ";
                 
-                #$str .= "<tr><td>$_</td><td>$hash{$_}</td></tr>" foreach keys 
+                #$str .= "<tr><td>$_</td><td>$hash{$_}</td></tr>" foreach keys <-- this is the way forward
+                
+                # should we last here? 
                 
                 print "DBGZ" if 0;
             }
             
-        } elsif ($type =~ /movies/) {
+            # end of tv printing
             
-            print "DBGZ" if 0;
+        } elsif ($type =~ /movies/) {
+            #get_table_for_printing($s{db}, 'movies', 'multiple', 'ORDER BY added ASC LIMIT 10');
+            if ($mode eq 'multiple') {
+                # movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
+                my %lh = %{$hash{$uid}};
+                
+                my $more = ""; # this needs to be a link to the entrys ...
+                
+                $str = "<tr><td><strong>title</strong></td><td><strong>genre</strong></td><td><strong>imdb</strong></td><td><strong>released</strong></td><td><strong>more</strong></td></tr>" if $processed_count == 0;
+                $str .= "<tr><td>$lh{title}</td><td>$lh{genre}</td><td>$lh{imdb}</td><td>$lh{released}</td><td>$more</td></tr>";
+                
+                print "DBGZ" if 0;
+                
+            } elsif ($mode eq 'single') {
+                
+                my %lh = %{$hash{$uid}};
+                
+                # have to do it this way to do it abstractally and not write a ridiculous custom sort 
+                my @keys = ('title', 'director', 'actors', 'genre', 'notes', 'imdb', 'cover', 'added', 'released', 'ffp');
+                $str = "<tr><td><strong>attribute</strong></td><td><strong>value</strong></td></tr>\n<tr><td>uid</td><td>$uid</td></tr>\n"; # another downside..
+                foreach my $key (@keys) {
+                    $str .= "<tr><td>$key</td><td>$lh{$key}</td></tr>\n";
+                }
+                
+                # should we last here?
+                
+                print "DBGZ" if 0;
+                
+            }
+            
+
             
         } elsif ($type =~ /stats/) {
             my $title = $_;
@@ -266,7 +319,13 @@ sub get_table_for_printing {
         }
         
         push @table, $str;
-        $count++;
+        $processed_count++;
+        
+        # more for HTML rendering/processing than db strain
+        if ($processed_count > $s{results_limit}) {
+            err("returning early with '$s{results_limit}' results (out of $count total)");
+            last;
+        }
     }
     
     push @table, "</table>";
