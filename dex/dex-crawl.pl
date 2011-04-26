@@ -10,6 +10,7 @@
 ## write function to query IMDB and return the information needed
 ## port put_stats() to dex::util::put_sql()
 ## move remove_non_existent_files() to dex::util
+## figure out why we're dropping the leading 0 on episode/season entries to the db
 
 use strict;
 use warnings;
