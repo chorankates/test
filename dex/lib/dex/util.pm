@@ -9,7 +9,7 @@ use File::Basename;
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(log_error create_db nicetime);
-our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql);
+our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql remove_non_existent_entries);
 
 # todo
 # start passing in \%s wfrom dex-crawl.pl / dex.cgi with all calls to properly access table names -- try looking in %dex::util::settings
@@ -303,6 +303,12 @@ sub get_sql {
     
     $dbh->disconnect;
     
+	unless ($match_count == 0) {
+		# %h = cleanup_sql(\%h, 'out') unless $match_count == 0; # yeah, should probably fix this on the other side too
+		$h{$_} = cleanup_sql($h{$_}, 'out') foreach (keys %h); # here, we may have only 1 match, but still HoH
+	}
+	
+	
     return (\%h, $match_count);
 }
 
@@ -313,11 +319,9 @@ sub put_sql {
 	my $results = 0;
 	my $table;
 	my $query;
-	
-	## cleanup for SQL
-	foreach my $key (keys %h) {
-		$h{$key} =~ s/'/^/g; # changed from " to ^ so that we can easily convert backwards
-	}
+
+	#$h{$_} = cleanup_sql($_)  foreach (keys %h);
+	%h = cleanup_sql(\%h, 'in'); # here we know we only have one hash key
 	
 	return 2 unless -f $database;
 	
@@ -364,6 +368,30 @@ sub put_sql {
 	$dbh->disconnect;
 	
 	return $results;
+}
+
+sub cleanup_sql {
+	# cleanup_sql(\%hash_of_text_to_be_used_in_sql, $direction) -- returns a 'sanitized' version of $sql_text -- direction is 'in'/'out' oriented on the database
+	# sanitized not intended to mean secure, just 'prettier' characters
+	my $href = shift;
+	my $direction = shift;
+	my %h = %{$href};
+	
+	return %h unless keys %h; # yep
+	
+	if ($direction =~ /in/i) {
+		# these are going into the database, convert ' to ^
+		foreach my $key (keys %h) {
+			$h{$key} =~ s/'/^/g; 
+		}
+	} else {
+		# these are coming out of the database, convert ^ to ' ()
+		foreach my $key (keys %h) {
+			$h{$key} =~ s/\^/'/g;
+		}
+	}
+
+	return %h;
 }
 
 
@@ -447,6 +475,75 @@ sub create_db {
     }
     
     return $results;
+}
+
+sub remove_non_existent_entries {
+	# remove_non_existent_entries($database, \@media_types, \%media_tables, $verbosity) -- iterates all entries in $database and drops the UID unless -f $ffp, returns ($tv_removed, $movies_removed)|(-1, error_message) based on success|failure
+	# might be faster to do this after indexing (but would require us to load the entire DB into memory to compare)
+	my $database = shift;
+	my $aref1    = shift;
+	my $href1    = shift;
+	my $verbose  = shift; # this is another illustration of why we need %s passed in (would also fix $table and @media_types definition)
+	my @media_types = @{$aref1};
+	my %media_tables = %{$href1};
+	
+	my ($dbh, $query, $q); # scope hacking
+	
+	my ($tv_removed, $movies_removed) = (0, 0);
+	
+	foreach my $type (@media_types) {
+		my $table = $media_tables{$type};
+		my $sql   = "SELECT uid,ffp FROM $table";
+		
+		my %removes;
+		
+		$dbh = DBI->connect("dbi:SQLite:$database");
+		return (-1, "unable to connect to '$database': $DBI::errstr") unless $dbh;
+		
+		$query = $dbh->prepare($sql);
+		return (-1, "unable to prepare '$sql': $DBI::errstr") unless $query;
+		
+		$q = $query->execute;
+		return $DBI::errstr if defined $DBI::errstr;
+
+		while (my @r = $query->fetchrow_array()) {
+			my $uid = $r[0];
+			my $ffp = $r[1];
+		
+			$ffp =~ s/\^/'/g;
+		
+			# see if the file still exists
+			unless (-f $ffp) {
+				# DELETE FROM tbl_tv WHERE uid == "ab3bc886eebe63ee5487fef62e3523e2"
+				# can't run deletes in the middle of a fetchrow, add UIDs to a hash 
+				$removes{$uid} = $ffp;
+				
+				$tv_removed++     if $type =~ /tv/i;
+				$movies_removed++ if $type =~ /movies/i;
+			}
+			
+			# done iterating this tables results
+		}
+		
+		# now actually removing the entries
+		foreach my $uid (keys %removes) {
+			my $ffp = $removes{$uid}; # need to undo any changes made to insert into SQL
+			
+			print "  removing '$ffp' ($uid)\n" if $verbose ge 1;
+			$sql = "DELETE FROM $table WHERE uid == \"$uid\"";
+			$query = $dbh->prepare($sql);
+			$q     = $query->execute;
+			
+			return (-1, $DBI::errstr) if defined $DBI::errstr;
+		}
+		
+		print "  done locating non-existent '$type'\n" if $verbose ge 2;
+		($query, $q) = (undef, undef); # don't want to key off of the last loop
+	}
+	
+	$dbh->disconnect;	
+	
+	return ($tv_removed, $movies_removed);
 }
 
 sub nicetime {
