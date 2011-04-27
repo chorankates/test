@@ -8,7 +8,7 @@ use File::Basename;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw(log_error create_db nicetime);
+our @EXPORT_OK = qw(log_error create_db nicetime cleanup_sql);
 our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql remove_non_existent_entries);
 
 # todo
@@ -16,7 +16,8 @@ our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql remove_non_exist
 
 # this will be used as an output for error_log()
 %CFG::log = (
-    error_file => "dex-crawl_error." . time . ".log",
+    #error_file => "dex-crawl_error." . time . ".log",
+	error_file => "error_dex-crawl.log", # switching to a single log file
 );
 
 # this should be kept in sync with dex-crawl.pl's $s{dir}, but in reality, should remain fairly static
@@ -66,7 +67,8 @@ sub get_info_from_filename {
 		$title =~ s/\s*\($year\)// if defined $year; # strip out ' ($year)'
 		$year = 'unknown' unless defined $year;
 		
-		if ($title =~ /\[|\]/) {
+		my @dots = $title =~ /\./g;
+		if (($title =~ /\[|\]/) or ($#dots gt 1)) {
 			$h{error} = "bad characters found: $ffp";
 			log_error($h{error});
 			
@@ -164,7 +166,7 @@ sub get_info_from_filename {
 sub log_error {
 	# log_error($filename, $string) -- throws an error to the console and writes out to $s{log_error}
 	my $filename = $CFG::log{error_file};
-        my $string = shift;
+    my $string = shift;
 	
 	my $fh;
 	open($fh, '>>', $filename) or warn "WARN:: unable to open '$filename':$!";

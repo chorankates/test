@@ -62,6 +62,7 @@ my (%f, %files, %s); # flags, results from dir_crawling, settings
 	
 	working_dir => Cwd::getcwd,
 	
+	error_file => "error_dex-crawl.log", # switching to a single log file
 );
 
 GetOptions(\%f, "help", "dir:s", "verbose:i", "database:s", "working_dir:s", "debug:i", "rescan:i");
@@ -76,9 +77,11 @@ print "% $0 started at ", nicetime(\@t1, "time"), "\n" if $s{verbose} ge 1;
 if ($s{rescan}) {
 	# delete artifacts and scan from scratch
 	print "> removing artifacts..\n" if $s{verbose} ge 1;
-	unlink ($s{database}) or warn "WARN:: unable to remove $s{database}: $!";
-	unlink ($s{dbg_storable}) or warn "WARN:: unable to remove $s{dbg_storable}: $!";
+	if (-f $s{database})     { unlink ($s{database})     or warn "WARN:: unable to remove $s{database}: $!"; }
+	if (-f $s{dbg_storable}) { unlink ($s{dbg_storable}) or warn "WARN:: unable to remove $s{dbg_storable}: $!";
 }
+
+if (-f $s{error_file})   { unlink ($s{error_file})   or warn "WARN:: unable to remove $s{error_file}: $!";
 
 unless (-d $s{image_dir}) {
 	mkdir($s{image_dir}) or warn "WARN:: unable to create '$s{image_dir}': $!";
