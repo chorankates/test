@@ -9,8 +9,8 @@
 # TODO
 ## write function to query IMDB and return the information needed
 ## port put_stats() to dex::util::put_sql()
-## move remove_non_existent_files() to dex::util
 ## figure out why we're dropping the leading 0 on episode/season entries to the db
+## switch to a single error file, overwrite with each run
 
 use strict;
 use warnings;
@@ -100,10 +100,12 @@ print Dumper(\%s) if $s{verbose} ge 1;
 
 ## remove files that no longer exist
 my @lt_remove_begin = localtime;
+# remove_non_existent_entries($database, \@media_types, \%media_tables, $verbosity)
 print "> remove_non_existent_entries($s{database}):\n" if $s{verbose} ge 1;
-my $remove_results = remove_non_existent_entries($s{database});
+my ($tv_count, $movies_count) = remove_non_existent_entries($s{database}, \@{$s{media_types}}, \%{$s{table}}, $s{verbose});
+warn "WARN:: error during removal: $movies_count" if $tv_count == -1;
 my @lt_remove_end = localtime;
-print "  done removing non-existent entries, took ", timetaken(\@lt_remove_begin, \@lt_remove_end), "\n" if $s{verbose} ge 1;
+print "  done removing non-existent entries ($tv_count tv files, ", ($movies_count =~ /\d+/ ? $movies_count : -1), " movie files), took ", timetaken(\@lt_remove_begin, \@lt_remove_end), "\n" if $s{verbose} ge 1; # this line helps me understand why some people hate perl
 
 ## find all the files.. all the files
 my @lt_find_files_begin = localtime;
@@ -121,7 +123,7 @@ foreach my $type (@{$s{media_types}}) {
 	my @dirs = @{$s{dir}{$type}};
 	
 	foreach my $dir (@dirs) {
-		print "  crawling '$dir'..\n" if $s{verbose} ge 2;
+		print "    crawling '$dir'..\n" if $s{verbose} ge 2;
 		%files = crawl_dir($dir, 0, $type, \%files);
 	}
 	my @lt_index_time_end = localtime;
@@ -261,71 +263,6 @@ sub already_added {
 	$results = $count;
 	
 	return $results;
-}
-
-sub remove_non_existent_entries {
-	# remove_non_existent_entries($database) -- iterates all entries in $database and drops the UID unless -f $ffp, returns 0|1/error_message based on success|failure
-	# might be faster to do this after indexing (but would require us to load the entire DB into memory to compare)
-	my $database = shift;
-	
-	my ($dbh, $query, $q); # scope hacking
-	
-	foreach my $type (@{$s{media_types}}) {
-		my $table = $s{table}{$type};
-		my $sql   = "SELECT uid,ffp FROM $table";
-		
-		my %removes;
-		
-		$dbh = DBI->connect("dbi:SQLite:$database");
-		unless ($dbh) {
-			warn "WARN:: unable to connect to '$database': $DBI::errstr";
-			return 1;
-		}
-		
-		$query = $dbh->prepare($sql);
-		unless ($query) {
-			warn "WARN:: unable to prepare '$sql': $DBI::errstr";
-			return 1;
-		}
-		
-		$q = $query->execute;
-		return $DBI::errstr if defined $DBI::errstr;
-
-		while (my @r = $query->fetchrow_array()) {
-			my $uid = $r[0];
-			my $ffp = $r[1];
-		
-			$ffp =~ s/\^/'/g;
-		
-			# see if the file still exists
-			unless (-f $ffp) {
-				# DELETE FROM tbl_tv WHERE uid == "ab3bc886eebe63ee5487fef62e3523e2"
-				# can't run deletes in the middle of a fetchrow, add UIDs to a hash 
-				$removes{$uid} = $ffp;
-			}
-			
-			# done iterating this tables results
-		}
-		
-		# now actually removing the entries
-		foreach my $uid (keys %removes) {
-			my $ffp = $removes{$uid}; # need to undo any changes made to insert into SQL
-			
-			print "  removing '$ffp' ($uid)\n" if $s{verbose} ge 1;
-			$sql = "DELETE FROM $table WHERE uid == \"$uid\"";
-			$query = $dbh->prepare($sql);
-			$q     = $query->execute;
-			
-			return $DBI::errstr if defined $DBI::errstr;
-		}
-		
-		print "  done locating non-existent '$type'\n" if $s{verbose} ge 2;
-		($query, $q) = (undef, undef); # don't want to key off of the last loop
-	}
-	
-	$dbh->disconnect;	
-	
-	return 0;
 }
 
 sub put_stats {
