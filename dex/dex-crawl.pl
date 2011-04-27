@@ -1,16 +1,9 @@
 #!/usr/bin/perl -w
 ## dex-crawl.pl -- script to gather information about TV shows and Movies on an external device (NAS for now)
 
-## schema notes:
-# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT
-#                42242243,              Psych,      04,                14          Think Tank,   unknown,   none,       2011/04/01, 2010/01/02,  /media/pdisk1/tv/Psych/Psych - Season 04/Psych - 04 - 14 - Think Tank.avi
-# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
-
 # TODO
 ## write function to query IMDB and return the information needed
-## port put_stats() to dex::util::put_sql()
 ## figure out why we're dropping the leading 0 on episode/season entries to the db
-## switch to a single error file, overwrite with each run
 
 use strict;
 use warnings;
@@ -292,6 +285,8 @@ sub put_stats {
 		files_size_added        => nicesize($files_size_added),
 	);
 	
+
+
 	foreach my $name (keys %stats) {
 		my $value = $stats{$name};
 		
