@@ -22,8 +22,8 @@ fi
 
 echo "> deploying.."
 # copy the wrapper into apache
-cp -v dex.cgi /usr/local/apache2/cgi-bin/
-chmod -v +x /usr/local/apache2/cgi-bin/dex.cgi
+sudo cp -v dex.cgi /usr/local/apache2/cgi-bin/
+sudo chmod -v +x /usr/local/apache2/cgi-bin/dex.cgi
 
 # copy dex-crawl.pl into the running dir
 cp -v dex-crawl.pl $run_dir
