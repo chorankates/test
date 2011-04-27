@@ -71,10 +71,10 @@ if ($s{rescan}) {
 	# delete artifacts and scan from scratch
 	print "> removing artifacts..\n" if $s{verbose} ge 1;
 	if (-f $s{database})     { unlink ($s{database})     or warn "WARN:: unable to remove $s{database}: $!"; }
-	if (-f $s{dbg_storable}) { unlink ($s{dbg_storable}) or warn "WARN:: unable to remove $s{dbg_storable}: $!";
+	if (-f $s{dbg_storable}) { unlink ($s{dbg_storable}) or warn "WARN:: unable to remove $s{dbg_storable}: $!"; }
 }
 
-if (-f $s{error_file})   { unlink ($s{error_file})   or warn "WARN:: unable to remove $s{error_file}: $!";
+if (-f $s{error_file})   { unlink ($s{error_file})   or warn "WARN:: unable to remove $s{error_file}: $!"; }
 
 unless (-d $s{image_dir}) {
 	mkdir($s{image_dir}) or warn "WARN:: unable to create '$s{image_dir}': $!";
@@ -285,7 +285,6 @@ sub put_stats {
 		files_size_added        => nicesize($files_size_added),
 	);
 	
-
 
 	foreach my $name (keys %stats) {
 		my $value = $stats{$name};
