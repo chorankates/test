@@ -12,20 +12,6 @@ our @EXPORT_OK = qw(log_error create_db nicetime cleanup_sql);
 our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql remove_non_existent_entries);
 
 # todo
-# start passing in \%s wfrom dex-crawl.pl / dex.cgi with all calls to properly access table names -- try looking in %dex::util::settings
-
-# this will be used as an output for error_log()
-%CFG::log = (
-    #error_file => "dex-crawl_error." . time . ".log",
-	error_file => "error_dex-crawl.log", # switching to a single log file
-);
-
-# this should be kept in sync with dex-crawl.pl's $s{dir}, but in reality, should remain fairly static
-%CFG::sources = (
-		tv 	=> [ '/media/pdisk1/tv/', ],
-		movies	=> [ '/media/pdisk2/movies/', ],
-);
-
 sub get_info_from_filename {
 	# get_info_from_filename($ffp, $file, $type) -- returns a hash of information based on $ffp and $type (tv|movies)
 	
@@ -50,7 +36,8 @@ sub get_info_from_filename {
 	
 	# this is kind of cheating.. and we're not using this in the schema (for now)
 	my $tmp_ffp = $ffp;
-	my $rel_str = join("|", @{$CFG::sources{$type}});
+	
+	my $rel_str = join("|", @{$dex::util::settings{dir}{$type}});
 	$tmp_ffp =~ s/\Q$rel_str//;
 	$h{relpath} = $tmp_ffp;
 	
@@ -165,7 +152,7 @@ sub get_info_from_filename {
 
 sub log_error {
 	# log_error($filename, $string) -- throws an error to the console and writes out to $s{log_error}
-	my $filename = $CFG::log{error_file};
+	my $filename = $dex::util::settings{error_file};
     my $string = shift;
 	
 	my $fh;
@@ -227,26 +214,11 @@ sub get_sql {
         return 1;
     }
     
-    
-    if ($type eq 'stats') {
-        $table = 'tbl_stats';
-        $sql = "SELECT * FROM $table";
-    } elsif ($type eq 'tv') {
-        $table = 'tbl_tv';
-        $sql = "SELECT * FROM $table";
-        
-    } elsif ($type eq 'movies') {
-        $table = 'tbl_movies';
-        $sql = "SELECT * FROM $table";
-        
-    } else {
-        err("trying to get_sql on an unknown type: $type");
-    }
-    
-	$sql .= " $addl_sql" if defined $addl_sql; # herp
 	
-    
-    
+	$table = $dex::util::settings{table}{$type};
+    $sql   = "SELECT * FROM $table";    
+	$sql  .= " $addl_sql" if defined $addl_sql; # herp
+
 	eval {
 		$query = $dbh->prepare($sql);
 		$q     = $query->execute;
@@ -262,7 +234,7 @@ sub get_sql {
     my $match_count = 0;
     while (my @r = $query->fetchrow_array()) {
         $match_count++;
-        if ($type =~ /stats/) {
+        if ($type eq 'stats') {
 			# $schema = 'uid TEXT PRIMARY KEY, name TEXT, value TEXT' if $tbl_name eq 'tbl_stats';
             my $uid   = $r[0];
             my $name  = $r[1];
@@ -407,7 +379,7 @@ sub create_db {
     # need to open a db and create the default schema
     # default schema is:
     # CREATE TABLE tbl_main (url TEXT PRIMARY KEY, status_code TEXT, size NUMERIC, links TEXT)
-    my @tables = ('tbl_movies', 'tbl_tv', 'tbl_stats');
+    my @tables = values %{$dex::util::settings{table}};
     
     my $dbh = DBI->connect("dbi:SQLite:$name") or $results = $DBI::errstr;
     
@@ -480,14 +452,11 @@ sub create_db {
 }
 
 sub remove_non_existent_entries {
-	# remove_non_existent_entries($database, \@media_types, \%media_tables, $verbosity) -- iterates all entries in $database and drops the UID unless -f $ffp, returns ($tv_removed, $movies_removed)|(-1, error_message) based on success|failure
+	# remove_non_existent_entries() -- iterates all entries in $database and drops the UID unless -f $ffp, returns ($tv_removed, $movies_removed)|(-1, error_message) based on success|failure
 	# might be faster to do this after indexing (but would require us to load the entire DB into memory to compare)
-	my $database = shift;
-	my $aref1    = shift;
-	my $href1    = shift;
-	my $verbose  = shift; # this is another illustration of why we need %s passed in (would also fix $table and @media_types definition)
-	my @media_types = @{$aref1};
-	my %media_tables = %{$href1};
+	my $database = $dex::util::settings{database};
+	my @media_types = @{$dex::util::settings{media_types}};
+	my %media_tables = %{$dex::util::settings{table}};
 	
 	my ($dbh, $query, $q); # scope hacking
 	
@@ -531,7 +500,7 @@ sub remove_non_existent_entries {
 		foreach my $uid (keys %removes) {
 			my $ffp = $removes{$uid}; # need to undo any changes made to insert into SQL
 			
-			print "  removing '$ffp' ($uid)\n" if $verbose ge 1;
+			print "  removing '$ffp' ($uid)\n" if $dex::util::settings{verbose} ge 1;
 			$sql = "DELETE FROM $table WHERE uid == \"$uid\"";
 			$query = $dbh->prepare($sql);
 			$q     = $query->execute;
@@ -539,7 +508,7 @@ sub remove_non_existent_entries {
 			return (-1, $DBI::errstr) if defined $DBI::errstr;
 		}
 		
-		print "  done locating non-existent '$type'\n" if $verbose ge 2;
+		print "  done locating non-existent '$type'\n" if $dex::util::settings{verbose} ge 2;
 		($query, $q) = (undef, undef); # don't want to key off of the last loop
 	}
 	

@@ -42,7 +42,7 @@ my (%f, %files, %s); # flags, results from dir_crawling, settings
 	table   => {
 		tv	=> 'tbl_tv',
 		movies	=> 'tbl_movies',
-		
+		stats => 'tbl_stats',
 	},
 	
 	media_types => [
@@ -62,7 +62,7 @@ GetOptions(\%f, "help", "dir:s", "verbose:i", "database:s", "working_dir:s", "de
 $s{$_} = $f{$_} foreach (keys %f);
 $s{image_dir} = File::Spec->catdir($s{working_dir}, "imdb_images");
 
-%dex::util::settings = %s;
+%dex::util::settings = %s; # excellent..
 
 my @t1 = localtime;
 print "% $0 started at ", nicetime(\@t1, "time"), "\n" if $s{verbose} ge 1;
