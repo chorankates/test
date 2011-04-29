@@ -98,7 +98,7 @@ print Dumper(\%s) if $s{verbose} ge 1;
 my @lt_remove_begin = localtime;
 # remove_non_existent_entries($database, \@media_types, \%media_tables, $verbosity)
 print "> remove_non_existent_entries($s{database}):\n" if $s{verbose} ge 1;
-my ($tv_count, $movies_count) = remove_non_existent_entries($s{database}, \@{$s{media_types}}, \%{$s{table}}, $s{verbose});
+my ($tv_count, $movies_count) = remove_non_existent_entries();
 warn "WARN:: error during removal: $movies_count" if $tv_count == -1;
 my @lt_remove_end = localtime;
 print "  done removing non-existent entries ($tv_count tv files, ", ($movies_count =~ /\d+/ ? $movies_count : -1), " movie files), took ", timetaken(\@lt_remove_begin, \@lt_remove_end), "\n" if $s{verbose} ge 1; # this line helps me understand why some people hate perl
