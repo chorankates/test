@@ -245,6 +245,9 @@ sub get_table_for_printing {
                 
                 my $more = ""; # this needs to be a link to this entrys individual page (we know the uid, so just do a type='single' query for uid == \"$md5\")
                 
+                # if we have an image, use that instead of the show title -- we should probably have a different test here..
+                $lh{$show} = "<img src='$lh{cover}'>" if defined $lh{cover};
+                
                 $str = "<tr><td><strong>show</strong></td><td><strong>season #</strong></td><td><strong>episode #</strong></td><td><strong>title</strong></td><td><strong>released</strong></td><td>more</td></tr>\n" if $processed_count == 0;
                 $str .= "<tr><td>$lh{show}</td><td>$lh{season}</td><td>$lh{episode}</td><td>$lh{title}</td><td>$lh{released}</td><td>$more</td></tr>";
                 
@@ -258,7 +261,7 @@ sub get_table_for_printing {
                 }
                 my %lh = %{$hash{$uid}};
                 
-                $str = "<tr><td><strong>attribute</strong></td><td><strong>value</strong></td></tr>\n
+                $str = "<img src='$lh{cover}'><br>\n<tr><td><strong>attribute</strong></td><td><strong>value</strong></td></tr>\n
                 <tr><td>uid</td><td>$lh{uid}</td></tr>\n
                 <tr><td>show</td><td>$lh{show}</td></tr>\n
                 <tr><td>season</td><td>$lh{season}</td></tr>\n
@@ -267,6 +270,7 @@ sub get_table_for_printing {
                 <tr><td>genre</td><td>$lh{genre}</td></tr>\n
                 <tr><td>notes</td><td>$lh{notes}</td></tr>\n
                 <tr><td>added</td><td>$lh{added}</td></tr>\n
+                <tr><td>wikipedia</td><td>$lh{wikipedia}</td></tr>\n
                 <tr><td>released</td><td><$lh{released}/td></tr>\n
                 <tr><td>ffp</td><td><$lh{ffp}/td></tr>\n
                 ";
