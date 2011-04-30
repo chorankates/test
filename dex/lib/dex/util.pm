@@ -96,7 +96,7 @@ sub get_info_from_filename {
 			return %h;
 		}
 		
-		$h{released}  = ($ffp =~ /\((\d*)\)$/) ? $! : 'unknown'; # tries to match <series name> - <'season' \d> (<year>)
+		$h{released}  = ($ffp =~ /\((\d*)\)$/) ? $1 : 'unknown'; # tries to match <series name> - <'season' \d> (<year>)
 		$h{genre}     = 'unknown';
 		$h{cover}     = 'unknown'; # needs to be defined but have no value
 		
