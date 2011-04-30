@@ -98,7 +98,7 @@ sub get_info_from_filename {
 		
 		$h{released}  = ($ffp =~ /\((\d*)\)$/) ? $! : 'unknown'; # tries to match <series name> - <'season' \d> (<year>)
 		$h{genre}     = 'unknown';
-		$h{cover}     = ''; # needs to be defined but have no value
+		$h{cover}     = 'unknown'; # needs to be defined but have no value
 		
 		# why are we always getting 'n' when '0n' is passed in?
 		
@@ -258,9 +258,10 @@ sub get_sql {
 			$h{$u}{genre}     = $r[5];
 			$h{$u}{notes}     = $r[6];
 			$h{$u}{wikipedia} = $r[7];
-			$h{$u}{added}     = $r[8];
-			$h{$u}{released}  = $r[9];
-			$h{$u}{ffp}       = $r[10];
+			$h{$u}{cover}     = $r[8];
+			$h{$u}{added}     = $r[9];
+			$h{$u}{released}  = $r[10];
+			$h{$u}{ffp}       = $r[11];
 
 		} elsif ($type eq 'movies') {
             # $schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_movies';
@@ -311,11 +312,11 @@ sub put_sql {
 	if ($type =~ /tv/) {
 		$table = 'tbl_tv';
 		
-		# tv: uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, wikipedia TEXT, cover TEXT added TEXT, released TEXT, ffp TEXT
+		# tv: uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, wikipedia TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
 		$query = $dbh->prepare("
 					INSERT
 					INTO $table
-					(uid, show, season, episode, title, genre, notes, wikipedia TEXT, cover TEXT, added, released, ffp)
+					(uid, show, season, episode, title, genre, notes, wikipedia, cover, added, released, ffp)
 					VALUES ('$h{uid}', '$h{show}', '$h{season}', '$h{episode}', '$h{title}', '$h{genre}', '$h{notes}', '$h{wikipedia}', '$h{cover}', '$h{added}', '$h{released}', '$h{ffp}')
 					");
 
@@ -403,8 +404,8 @@ sub create_db {
 			my $schema;
 			
 			# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
-			$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT'                     if $tbl_name eq 'tbl_movies';
-			$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, wikipedia TEXT, cover TEXT added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_tv';
+			$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT'                      if $tbl_name eq 'tbl_movies';
+			$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, wikipedia TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_tv';
 			$schema = 'uid TEXT PRIMARY KEY, name TEXT, value TEXT' if $tbl_name eq 'tbl_stats';
 			next unless $schema; # failsafe
 		
@@ -539,7 +540,8 @@ sub get_external_link {
 		# s=tt means search for movie titles
 		# q=<query>
 		my $base_url = 'http://www.imdb.com/find?s=tt&q=';
-		my $query = uri_cleanup($h{title}, $site); #
+	    my $query = sql_cleanup($h{title}, 'out');
+		   $query = uri_cleanup($query, $site); #
 		
 		$url = $base_url . $query;
 		
@@ -549,8 +551,9 @@ sub get_external_link {
 		# always want to append '(tv series)' for best results
 		my $base_url = 'http://en.wikipedia.org/wiki/';
 		my $query = uri_cleanup($h{show}, $site); 
+		my $append = '_(tv_series)';
 		
-		$url = $base_url . $query;
+		$url = $base_url . $query  . $append;
 		
 	} else {
 		warn "WARN:: unknown site '$site' specified in get_external_link()";
@@ -567,13 +570,13 @@ sub uri_cleanup {
 	my $results;
 	
 	#$results = URI::Escape::uri_escape($string); # this will give us %20, not +
-	$string = $results;
-
 	if ($type eq 'imdb') {
 		$string =~ s/\s/\+/g; # turn ' 'into +
 	} elsif ($type eq 'wikipedia') {
 		$string =~ s/\s/_/g; # turn ' ' into _
 	}
+
+	$results = $string;
 
 	# we're already warning above, no need to duplicate it here
 

@@ -133,7 +133,8 @@ print "  done indexing media, found ", scalar keys %files, " files, took ", time
 my @lt_find_new_files_begin = localtime;
 my ($added, $processed, $size_total, $size_added) = (0, 0);
 print "> adding new media to the db:\n" if $s{verbose} ge 1;
-foreach my $ffp (keys %files) {
+foreach my $ffp (sort keys %files) {
+	# sorting is expensive, especially on 4k+ keys, but we only have to do it once
 	$processed++;
 	my $file = $files{$ffp}{basename};
 	my $type = $files{$ffp}{type};
