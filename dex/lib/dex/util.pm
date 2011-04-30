@@ -362,6 +362,7 @@ sub cleanup_sql {
 		# these are coming out of the database, convert ^ to ' ()
 		foreach my $key (keys %h) {
 			$h{$key} =~ s/\^/'/g;
+			$h{$key} =~ s/^(\d)$/0$1/g; # prepending 0 because the database is dropping unnecessary digits 
 		}
 	}
 
