@@ -5,6 +5,8 @@ use warnings;
 use DBD::SQLite;
 use Digest::MD5;
 use File::Basename;
+use LWP::UserAgent;
+use URI::Escape;
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -12,6 +14,8 @@ our @EXPORT_OK = qw(log_error create_db nicetime cleanup_sql);
 our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql remove_non_existent_entries);
 
 # todo
+# now that we're collecting wikipedia urls for tv shows, it makes sense to abstract the urls based on show title to another table..
+
 sub get_info_from_filename {
 	# get_info_from_filename($ffp, $file, $type) -- returns a hash of information based on $ffp and $type (tv|movies)
 	
@@ -72,10 +76,10 @@ sub get_info_from_filename {
 		$h{title} = $title;
 		$h{released}  = $year;
 		
-		$h{cover} = 'unknown';
-		$h{imdb}  = ''; # generate this here
-		$h{genre} = 'unknown'; # for now, we'll parse this via the imdb address later
-		$h{actors} = 'unknown'; # again, for now
+		$h{cover}    = 'unknown';
+		$h{imdb}     = get_external_link(\%h, 'imdb'); # this is just a link, another function will recurse through and populate genre/actors/director
+		$h{genre}    = 'unknown'; # for now, we'll parse this via the imdb address later
+		$h{actors}   = 'unknown'; # again, for now
 		$h{director} = 'unknown';
 	
 		# tv returns on its own, but we rely on a fall through return.. why?
@@ -92,8 +96,9 @@ sub get_info_from_filename {
 			return %h;
 		}
 		
-		$h{released} = 'unknown'; # don't currently have a good way of pulling this
-		$h{genre}    = 'unknown';
+		$h{released}  = ($ffp =~ /\((\d*)\)$/) ? $! : 'unknown'; # tries to match <series name> - <'season' \d> (<year>)
+		$h{genre}     = 'unknown';
+		$h{cover}     = ''; # needs to be defined but have no value
 		
 		# why are we always getting 'n' when '0n' is passed in?
 		
@@ -139,6 +144,7 @@ sub get_info_from_filename {
 		}
 		
 		$h{title} =~ s/(\..*?$)//; # chopping the file extension
+		$h{wikipedia} = get_external_link(\%h, 'wikipedia'); # generate this here
 		
 		return %h;
 		
@@ -517,6 +523,61 @@ sub remove_non_existent_entries {
 	$dbh->disconnect;	
 	
 	return ($tv_removed, $movies_removed);
+}
+
+# $h{wikipedia} = get_external_link(\%h, 'wikipedia'); # generate this here
+sub get_external_link {
+	# get_external_link(\%file_info, $site) -- returns 0 or a link on $site for the file in \%file_info
+	my ($href, $site) = @_;
+	my $url;
+	
+	my %h = %{$href};
+	
+	if ($site eq 'imdb') {
+		# movies
+		# sample url = http://www.imdb.com/find?s=tt&q=indiana+jones
+		# s=tt means search for movie titles
+		# q=<query>
+		my $base_url = 'http://www.imdb.com/find?s=tt&q=';
+		my $query = uri_cleanup($h{title}, $site); #
+		
+		$url = $base_url . $query;
+		
+	} elsif ($site eq 'wikipedia') {
+		# probably tv, but maybe movies in the future
+		# sample url = http://en.wikipedia.org/wiki/Nikita_(tv_series)
+		# always want to append '(tv series)' for best results
+		my $base_url = 'http://en.wikipedia.org/wiki/';
+		my $query = uri_cleanup($h{show}, $site); 
+		
+		$url = $base_url . $query;
+		
+	} else {
+		warn "WARN:: unknown site '$site' specified in get_external_link()";
+		return 0;
+	}
+	
+	return $url;
+}
+
+sub uri_cleanup {
+	# uri_cleanup($string, $type) -- returns a URI escaped version of $string based on $type
+	my $string = shift;
+	my $type   = shift;
+	my $results;
+	
+	#$results = URI::Escape::uri_escape($string); # this will give us %20, not +
+	$string = $results;
+
+	if ($type eq 'imdb') {
+		$string =~ s/\s/\+/g; # turn ' 'into +
+	} elsif ($type eq 'wikipedia') {
+		$string =~ s/\s/_/g; # turn ' ' into _
+	}
+
+	# we're already warning above, no need to duplicate it here
+
+	return $results;
 }
 
 sub nicetime {
