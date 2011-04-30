@@ -3,7 +3,6 @@
 
 # TODO
 ## write function to query IMDB and return the information needed
-## figure out why we're dropping the leading 0 on episode/season entries to the db
 
 use strict;
 use warnings;
@@ -176,8 +175,13 @@ my @tv_files    = grep { $files{$_}{type} eq 'tv' }     keys %files;
 my @movie_files = grep { $files{$_}{type} eq 'movies' } keys %files;
 
 # this helps
-my $sort_cmd = "sort $s{error_file} > $s{error_file}";
-my $sort_results = `$sort_cmd`;
+if (-f $s{error_file}) { 
+	my $sort_file = $s{error_file} . ".tmp";
+	my $sort_cmd = "sort $s{error_file} >> $sort_file";
+	my $sort_results = `$sort_cmd`;
+	$sort_cmd = "mv $sort_file $s{error_file}";
+	$sort_results = `$sort_cmd`;
+}
 
 my $stats_results = put_stats($s{database}, $processed, $added, $#tv_files, $#movie_files, $size_total, $size_added);
 
