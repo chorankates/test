@@ -32,4 +32,4 @@ cp -v dex-crawl.pl $run_dir
 cp -v lib/dex/util.pm $lib_dir
 
 # copy the latest db into the running dir
-cp -v dex.sqlite $run_dir
+# cp -v dex.sqlite $run_dir
