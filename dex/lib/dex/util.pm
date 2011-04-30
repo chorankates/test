@@ -243,17 +243,18 @@ sub get_sql {
             $h{$name} = $value; # this hash is special
             
         } elsif ($type eq 'tv') {
-            # $schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT'        if $tbl_name eq 'tbl_tv';
+            # $schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, wikipedia TEXT, cover TEXT added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_tv';
 			my $u = $r[0];
-			$h{$u}{show}     = $r[1];
-			$h{$u}{season}   = $r[2];
-			$h{$u}{episode}  = $r[3];
-			$h{$u}{title}    = $r[4];
-			$h{$u}{genre}    = $r[5];
-			$h{$u}{notes}    = $r[6];
-			$h{$u}{added}    = $r[7];
-			$h{$u}{released} = $r[8];
-			$h{$u}{ffp}      = $r[9];
+			$h{$u}{show}      = $r[1];
+			$h{$u}{season}    = $r[2];
+			$h{$u}{episode}   = $r[3];
+			$h{$u}{title}     = $r[4];
+			$h{$u}{genre}     = $r[5];
+			$h{$u}{notes}     = $r[6];
+			$h{$u}{wikipedia} = $r[7];
+			$h{$u}{added}     = $r[8];
+			$h{$u}{released}  = $r[9];
+			$h{$u}{ffp}       = $r[10];
 
 		} elsif ($type eq 'movies') {
             # $schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_movies';
@@ -304,12 +305,12 @@ sub put_sql {
 	if ($type =~ /tv/) {
 		$table = 'tbl_tv';
 		
-		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT
+		# tv: uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, wikipedia TEXT, cover TEXT added TEXT, released TEXT, ffp TEXT
 		$query = $dbh->prepare("
 					INSERT
 					INTO $table
-					(uid, show, season, episode, title, genre, notes, added, released, ffp)
-					VALUES ('$h{uid}', '$h{show}', '$h{season}', '$h{episode}', '$h{title}', '$h{genre}', '$h{notes}', '$h{added}', '$h{released}', '$h{ffp}')
+					(uid, show, season, episode, title, genre, notes, wikipedia TEXT, cover TEXT, added, released, ffp)
+					VALUES ('$h{uid}', '$h{show}', '$h{season}', '$h{episode}', '$h{title}', '$h{genre}', '$h{notes}', '$h{wikipedia}', '$h{cover}', '$h{added}', '$h{released}', '$h{ffp}')
 					");
 
 		
@@ -396,8 +397,8 @@ sub create_db {
 			my $schema;
 			
 			# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
-			$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_movies';
-			$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT'        if $tbl_name eq 'tbl_tv';
+			$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT'                     if $tbl_name eq 'tbl_movies';
+			$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, wikipedia TEXT, cover TEXT added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_tv';
 			$schema = 'uid TEXT PRIMARY KEY, name TEXT, value TEXT' if $tbl_name eq 'tbl_stats';
 			next unless $schema; # failsafe
 		
