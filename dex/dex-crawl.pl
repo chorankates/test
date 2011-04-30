@@ -224,6 +224,10 @@ sub crawl_dir {
 	return %h;
 }
 
+# should actually combine these two functions into something more generic
+sub get_wikipedia {
+	
+}
 
 sub get_imdb {
 	# get_imdb($movie) - given a $movie title, returns a hash of information about the first match found
