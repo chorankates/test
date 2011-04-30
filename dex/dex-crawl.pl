@@ -175,6 +175,10 @@ print "  done adding, found/added $added new files, took ", timetaken(\@lt_find_
 my @tv_files    = grep { $files{$_}{type} eq 'tv' }     keys %files;
 my @movie_files = grep { $files{$_}{type} eq 'movies' } keys %files;
 
+# this helps
+my $sort_cmd = "sort $s{error_file} > $s{error_file}";
+my $sort_results = `$sort_cmd`;
+
 my $stats_results = put_stats($s{database}, $processed, $added, $#tv_files, $#movie_files, $size_total, $size_added);
 
 my @t2 = localtime;
