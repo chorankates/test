@@ -99,18 +99,7 @@ unless (-f $s{database}) {
 print Dumper(\%f) if $s{verbose} ge 2;
 print Dumper(\%s) if $s{verbose} ge 1;
 
-## remove files that no longer exist -- only in non-debug runs
-unless ($s{debug}) { 
-	my @lt_remove_begin = localtime;
-	# remove_non_existent_entries($database, \@media_types, \%media_tables, $verbosity)
-	print "> remove_non_existent_entries($s{database}):\n" if $s{verbose} ge 1;
-	my ($tv_count, $movies_count) = remove_non_existent_entries();
-	warn "WARN:: error during removal: $movies_count" if $tv_count == -1;
-	my @lt_remove_end = localtime;
-	print "  done removing non-existent entries ($tv_count tv files, ", ($movies_count =~ /\d+/ ? $movies_count : -1), " movie files), took ", timetaken(\@lt_remove_begin, \@lt_remove_end), "\n" if $s{verbose} ge 1; # this line helps me understand why some people hate perl
-}
-
-## find all the files.. all the files
+# find all the files.. all the files
 my @lt_find_files_begin = localtime;
 print "> indexing media (" . join("," . @{$s{media_types}}) . ")\n" if $s{verbose} ge 1;
 foreach my $type (@{$s{media_types}}) {
@@ -220,7 +209,23 @@ if (-f $s{error_file}) {
 	$sort_results = `$sort_cmd`;
 }
 
+## do some database maintenance
 my $stats_results = put_stats($s{database}, $processed, $added, $#tv_files, $#movie_files, $size_total, $size_added);
+
+## remove files that DNE, get imdb/wikipedia information
+my @lt_db_maint_begin = localtime;
+print "> database_maintenance($s{database}):\n" if $s{verbose} ge 1;
+my ($tv_removed_count, $tv_wiki_count, $movie_removed_count, $movie_imdb_count) = database_maintenance($s{database});
+my @lt_db_maint_end = localtime;
+print(
+	  "  done: non-existent entries removed ($tv_removed_count tv files, $movie_removed_count movie files), ",
+	  "wiki/imdb information added ($tv_wiki_count tv files, $movie_imdb_count movie files), ",
+	  " took ",
+	  timetaken(\@lt_db_maint_begin, \@lt_db_maint_end),
+	  "\n",
+) if $s{verbose} ge 1;
+
+
 
 my @t2 = localtime;
 print "% $0 finished at ", nicetime(\@t2, "time"), " took ", timetaken(\@t1, \@t2), "\n" if $s{verbose} ge 1;

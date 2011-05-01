@@ -11,7 +11,7 @@ use URI::Escape;
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(log_error create_db nicetime cleanup_sql cleanup_uri cleanup_filename);
-our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql remove_non_existent_entries download_file);
+our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql database_maintenance download_file);
 
 # todo
 # now that we're collecting wikipedia urls for tv shows, it makes sense to abstract the urls based on show title to another table..
@@ -488,8 +488,8 @@ sub create_db {
     return $results;
 }
 
-sub remove_non_existent_entries {
-	# remove_non_existent_entries() -- iterates all entries in $database and drops the UID unless -f $ffp, returns ($tv_removed, $movies_removed)|(-1, error_message) based on success|failure
+sub database_maintenance {
+	# database_maintenance () -- iterates all entries in $database and drops the UID unless -f $ffp, then tries to find wiki/imdb information about the remaining files, returns ($tv_removed, $tv_wiki_added, $movies_removed, $movie_imdb_added)
 	# might be faster to do this after indexing (but would require us to load the entire DB into memory to compare)
 	my $database = $dex::util::settings{database};
 	my @media_types = @{$dex::util::settings{media_types}};
@@ -497,13 +497,15 @@ sub remove_non_existent_entries {
 	
 	my ($dbh, $query, $q); # scope hacking
 	
-	my ($tv_removed, $movies_removed) = (0, 0);
+	my ($tv_removed, $tv_added, $movies_removed, $movies_added) = (0, 0, 0, 0);
 	
 	foreach my $type (@media_types) {
 		my $table = $media_tables{$type};
-		my $sql   = "SELECT uid,ffp FROM $table";
+		#my $sql   = "SELECT uid,ffp FROM $table";
+		my $sql   = "SELECT * FROM $table";
 		
 		my %removes;
+		my %external_media;
 		
 		$dbh = DBI->connect("dbi:SQLite:$database");
 		return (-1, "unable to connect to '$database': $DBI::errstr") unless $dbh;
@@ -514,26 +516,84 @@ sub remove_non_existent_entries {
 		$q = $query->execute;
 		return $DBI::errstr if defined $DBI::errstr;
 
+		# iterating all database entries
 		while (my @r = $query->fetchrow_array()) {
-			my $uid = $r[0];
-			my $ffp = $r[1];
-		
-			$ffp =~ s/\^/'/g;
+#			$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT'                                   if $tbl_name eq 'tbl_movies';
+#			$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, actors TEXT, genres TEXT, notes TEXT, wikipedia TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_tv';
+			# common
+			my %qh;
+			
+			# don't like having to keep this in 2 places, but get_sql() is best suited for queries, and we're iterating here
+			if ($type eq 'movies') {
+				$qh{uid} = $r[0];
+				$qh{title}    = $r[1];
+				$qh{director} = $r[2];
+				$qh{actors}   = $r[3];
+				$qh{genres}   = $r[4];
+				$qh{notes}    = $r[5];			
+				$qh{imdb}     = $r[6];
+				$qh{cover}    = $r[7];
+				$qh{added}    = $r[8];
+				$qh{released} = $r[9];
+				$qh{ffp}      = $r[10];
+			} elsif ($type eq 'tv') {
+				$qh{uid} = $r[0];				
+				$qh{show}      = $r[1];
+				$qh{season}    = $r[2];
+				$qh{episode}   = $r[3];
+				$qh{title}     = $r[4];
+				$qh{actors}    = $r[5];
+				$qh{genres}    = $r[6];
+				$qh{notes}     = $r[7];
+				$qh{wikipedia} = $r[8];
+				$qh{cover}     = $r[9];
+				$qh{added}     = $r[10];
+				$qh{released}  = $r[11];
+				$qh{ffp}       = $r[12];
+
+			} else {
+				return (-1, "unknown table '$type'");
+			}
+
+			
+			%qh = cleanup_sql(\%qh, 'out');
+			#$ffp =~ s/\^/'/g;
 		
 			# see if the file still exists
-			unless (-f $ffp) {
+			unless (-f $qh{ffp}) {
 				# DELETE FROM tbl_tv WHERE uid == "ab3bc886eebe63ee5487fef62e3523e2"
 				# can't run deletes in the middle of a fetchrow, add UIDs to a hash 
-				$removes{$uid} = $ffp;
+				$removes{$qh{uid}} = $qh{ffp};
 				
 				$tv_removed++     if $type =~ /tv/i;
 				$movies_removed++ if $type =~ /movies/i;
 			}
 			
+			if (-f $qh{ffp}) {
+				# need to check to see if it has wiki entries or not
+				if ($type eq 'tv') {
+					next if -f $qh{cover}; # this is the best test
+					next if $qh{actors} ne '';
+					next if $qh{genres} ne '';
+					
+					$external_media{$qh{uid}} = \%qh;
+					
+				} elsif ($type eq 'movies') {
+					next if -f $qh{cover};
+					next if $qh{actors}   ne '';
+					next if $qh{director} ne '';
+					next if $qh{genres}   ne '';
+					
+					$external_media{$qh{uid}} = \%qh;
+				}
+				
+				# done with checking for wikipedia/imdb entries
+			}
+			
 			# done iterating this tables results
 		}
 		
-		# now actually removing the entries
+		# remove the entries where file DNE
 		foreach my $uid (keys %removes) {
 			my $ffp = $removes{$uid}; # need to undo any changes made to insert into SQL
 			
@@ -545,13 +605,55 @@ sub remove_non_existent_entries {
 			return (-1, $DBI::errstr) if defined $DBI::errstr;
 		}
 		
+		# get wikipedia/imdb information where we don't have it
+		foreach my $uid (keys %external_media) {
+			my $href = $external_media{$uid};
+			my %lh   = %{$href};
+			my $query_success = 0;
+			
+			## traffic cop for movies/tv here
+			if ($lh{type} eq 'movies' and $dex::util::settings{retrieve_imdb}) {
+				# need to try and get the wikipedia information
+				print "    get_imdb($lh{title})\n" if $dex::util::settings{verbose} ge 1;
+				my %movie_info = get_imdb(\%lh);
+		
+				if (keys %movie_info) {
+					# successful call, add information to %file_info (need to update the $files{$ffp}{imdb} entry to be the actual page, not search page)
+					$lh{released} = $movie_info{released} // 'unknown';
+					$lh{director} = $movie_info{director} // 'unknown';
+					$lh{imdb}     = $movie_info{new_imdb} // $lh{imdb};
+					$lh{cover}    = $movie_info{cover}    // 'unknown';
+					$lh{actors}   = $movie_info{actors}   // 'unknown';
+					$lh{genres}   = $movie_info{genres}   // 'unknown';
+					
+					$query_success = 1;
+				} else {
+					# unsuccessful call, throw a warning
+					log_error("unable to get imdb information for '$lh{ffp}' from '$lh{imdb}'");
+				}
+				
+			} elsif ($lh{type} eq 'tv') {
+				
+				$query_success = 1; 
+				
+			}
+			
+			if ($query_success) {
+				# we got good info from imdb/wikipedia, add this to the db
+				my $results = put_sql($dex::util::settings, $lh{type}, \%lh);
+			}
+			
+			return (-1, $DBI::errstr) if defined $DBI::errstr;
+		}
+		
 		print "  done locating non-existent '$type'\n" if $dex::util::settings{verbose} ge 2;
 		($query, $q) = (undef, undef); # don't want to key off of the last loop
 	}
 	
 	$dbh->disconnect;	
 	
-	return ($tv_removed, $movies_removed);
+	#return ($tv_removed, $movies_removed);
+	return ($tv_removed, $tv_added, $movies_removed, $movies_added);
 }
 
 # $h{wikipedia} = get_external_link(\%h, 'wikipedia'); # generate this here
