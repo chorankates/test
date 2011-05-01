@@ -8,7 +8,7 @@ use strict;
 use warnings;
 use 5.010;
 
-use lib 'lib/';
+use lib 'lib';
 use dex::util;
 
 use lib '/home/conor/Dropbox/perl/_pm';
@@ -218,7 +218,7 @@ sub crawl_dir {
 			my $ffp = File::Spec->canonpath($File::Find::name);
 			return unless -f $ffp; # don't want directories
 			#return unless $ffp =~ /\.(avi|mp4|mpeg|mpg|mkv)$/; # short whitelist
-			return if $ffp =~ /\.(txt|log|srt|nfo|jpg|png|htm|ico|idx|sub|mp3|sfv|pdf|ini)$/i; # short blacklist
+			return if $ffp =~ /\.(txt|log|srt|nfo|jpg|png|htm|ico|idx|sub|mp3|sfv|pdf|ini|zip)$/i; # short blacklist
 
 			my $file = $File::Find::name;
 			my $basename = basename($file);
