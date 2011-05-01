@@ -24,15 +24,21 @@ use File::Spec;
 use Getopt::Long;
 use LWP::UserAgent;
 use Storable;
+use Time::HiRes;
 
 my (%f, %files, %s); # flags, results from dir_crawling, settings
 
 %s = (
-	verbose  => 1, # 0 <= n <= 3
-	database => 'dex.sqlite', # this can be overloaded, assume that it exists in $s{working_dir}
-	debug    => 1, # overload the indexing with a storable 
-	dbg_storable => 'latest_index.sbl', 
-
+	database           => 'dex.sqlite', # this can be overloaded, assume that it exists in $s{working_dir}
+	debug              => 1, # overload the indexing with a storable 
+	dbg_storable       => 'latest_index.sbl', 
+	error_file         => "error_dex-crawl.log", # switching to a single log file
+	function           => 'crawl', # will want to change this to dex-cli.pl and add a 'query' function
+	retrieve_imdb      => 1,
+	retrieve_wikipedia => 1,
+	working_dir        => Cwd::getcwd,
+	verbose            => 1, # 0 <= n <= 3
+	
 	dir     => {
 		tv 	=> [ '/media/pdisk1/tv/', ],
 		movies	=> [ '/media/pdisk2/movies/', ],
@@ -50,11 +56,11 @@ my (%f, %files, %s); # flags, results from dir_crawling, settings
 		#'mp3', # how can we incorporate this? generate html with folder.jpg?
 	],
 	
-	function => 'crawl', # will want to change this to dex-cli.pl and add a 'query' function
+	browser => {
+		useragent => 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.2.16) Gecko/20110323 Ubuntu/10.10 (maverick) Firefox/3.6.16',
+		timeout   => 10, # low timeouts
+	},	
 	
-	working_dir => Cwd::getcwd,
-	
-	error_file => "error_dex-crawl.log", # switching to a single log file
 );
 
 GetOptions(\%f, "help", "dir:s", "verbose:i", "database:s", "working_dir:s", "debug:i", "rescan:i");
@@ -163,6 +169,34 @@ foreach my $ffp (sort keys %files) {
 	
 	next if ($file_info{error}); # already logged a warning
 	
+	# don't know that we always want to do this here, but
+	if ($type eq 'tv' and $s{retrieve_wikipedia}) {
+		# noop, don't have get_wikipedia() up and running
+		
+		#my %tv_info = get_wikipedia(\%file_info);
+		
+		print "DBGZ" if 0;
+	} elsif ($type eq 'movies' and $s{retrieve_imdb}) {
+		# get information from imdb.com
+		print "    get_imdb($file_info{title})\n" if $s{verbose} ge 1;
+		my %movie_info = get_imdb(\%file_info);
+		
+		if (keys %movie_info) {
+			# successful call, add information to %file_info (need to update the $files{$ffp}{imdb} entry to be the actual page, not search page)
+			$file_info{released} = $movie_info{released} // 'unknown';
+			$file_info{director} = $movie_info{director} // 'unknown';
+			$file_info{imdb}     = $movie_info{new_imdb} // $file_info{imdb};
+			$file_info{cover}    = $movie_info{cover}    // 'unknown';
+			$file_info{actors}   = $movie_info{actors}   // 'unknown';
+			$file_info{genres}   = $movie_info{genres}   // 'unknown';
+			
+		} else {
+			# unsuccessful call, throw a warning
+			log_error("unable to get imdb information for '$file' from '$files{$ffp}{imdb}");
+		}
+		
+	}
+	
 	## now add to the db
 	my $results = put_sql($s{database}, $type, \%file_info);
 	
@@ -225,31 +259,58 @@ sub crawl_dir {
 	return %h;
 }
 
+sub get_external_information {
+	# get_external_information(\%hash) -
+}
+
 # should actually combine these two functions into something more generic
 sub get_wikipedia {
 	
 }
 
 sub get_imdb {
-	# get_imdb($movie) - given a $movie title, returns a hash of information about the first match found
+	# get_imdb(\%file_info) - given %file_info, returns a hash of information about the first match found (or an empty hash for error)
 	  # TODO: update function so it can handle multiple matches -- though since this is a non-interactive crawler, how would we handle the logic?
-	my $movie = shift;
-	my %h;
+	my $href = shift;
+	my %file_info = %{$href};
+	my %h; # will contain information coming back from imdb
 
-	my $search_url = "http://www.imdb.com/find?s=tt&q=$movie"; # s=tt is for 'search: titles'
+	my $search_url = $file_info{imdb};
+	
+	return {} unless defined $search_url;
 	
 	my $worker = LWP::UserAgent->new();
-	   $worker->agent('dex'); 
+	   $worker->agent($s{browser}{useragent});
+	   $worker->timeout($s{browser}{timeout});
 	
+	# get the search result page
+	my $search_time_begin = Time::HiRes::gettimeofday();
 	my $response  = $worker->get($search_url);
+	my $search_time_end = Time::HiRes::gettimeofday();
+	print "      search took ", substr(($search_time_end - $search_time_begin), 0, 5), "s\n" if $s{verbose} ge 3;
 	
-	## $response now contains the contents of the search result page, need to find the first link, and follow it before parsing
 	# we also need to download the cover image to $s{image_dir}
+	my @search_contents = $response->content;
 	
-	$h{released} = '';
-	$h{imdb}     = ''; # URL from worker
-	$h{actors}   = ''; # CSV, since we're going to push into a SQLite DB anyway
-	$h{genre}    = ''; # CSV
+	my $rel_link     = 'http://www.imdb.com';
+	my $title_path   = $1 if @search_contents ~~ /href="(\/title.*?)"/ig;
+	my $content_link = $rel_link . $title_path;
+	
+	# get the content result page
+	my $content_time_begin = Time::HiRes::gettimeofday();
+	$response = $worker->get($content_link);
+	my @results_contents = $response->content;
+	my $content_time_end = Time::HiRes::gettimeofday();
+	print "      results fetch took ", substr(($content_time_end - $content_time_begin), 0, 5), "s\n" if $s{verbose} ge 3;
+	
+	print "DBGZ" if 0;
+	
+	$h{released}  = $1 if @results_contents ~~ /\<span\>\(\<a\shref=".*?\/year\/.*\>(.*?)\<\/a\>\)<\/span\>/ims;
+	$h{director}  = $1 if @results_contents ~~ /Director\:.*?"\>(.*?)\<\/a\>\<\/div\>/ims;
+	$h{www_cover} = $1 if @results_contents ~~ /\<a\s*onclick="\(new\sImage.*?\>\<img\ssrc="(.*?)".*?Poster"\s*\/\>\<\/a\>/ims; # need to download this file to $s{image_dir}, then set $h{cover} to the filename in $s{image_dir}
+	$h{new_imdb}  = $content_link; # contains the actual address to the imdb page, not the search results
+	$h{actors}    = ''; # CSV, since we're going to push into a SQLite DB anyway
+	$h{genres}     = ''; # CSV
 	
 	return %h;
 }
