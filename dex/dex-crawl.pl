@@ -178,8 +178,8 @@ foreach my $ffp (sort keys %files) {
 		#my %tv_info = get_wikipedia(\%file_info);
 		
 		print "DBGZ" if 0;
-	} elsif ($type eq 'movies' and $s{retrieve_imdb}) {
-		# get information from imdb.com
+	} elsif ($type eq 'movies' and $s{retrieve_imdb} and not (($file_info{actors}) and ($file_info{director}))) {
+		# get information from imdb.com if retreive_imdb and we haven't gotten the information already
 		print "    get_imdb($file_info{title})\n" if $s{verbose} ge 1;
 		my %movie_info = get_imdb(\%file_info);
 		
@@ -325,11 +325,17 @@ sub get_imdb {
 	$h{director}  = $1 if @results_contents ~~ /Director\:.*?"\>(.*?)\<\/a\>\<\/div\>/ims;
 	$h{www_cover} = $1 if @results_contents ~~ /\<a\s*onclick="\(new\sImage.*?\>\<img\ssrc="(.*?)".*?Poster"\s*\/\>\<\/a\>/ims; # need to download this file to $s{image_dir}, then set $h{cover} to the filename in $s{image_dir}
 	
+	return {} unless $h{new_imdb} and $h{released} and $h{director} and $h{www_cover};
+	
 	# extract extended information
 	my $download_filename = File::Spec->catfile($s{image_dir}, basename($file_info{ffp}));
 	   $download_filename =~ s/\..*?$/\.jpg/i;
-	my $download_results  = download_file($h{www_cover}, $download_filename);
-	$h{cover} = ($download_results eq 0) ? $download_filename : "unable to download: $h{www_cover}";
+	if (! -f $download_filename) {
+		my $download_results  = download_file($h{www_cover}, $download_filename);
+		$h{cover} = ($download_results eq 0) ? $download_filename : "unable to download: $h{www_cover}";
+	} else {
+		$h{cover} = $download_filename;
+	}
 	
 	my @actors;
 	my $actors_str = $1 if @results_contents ~~ /\<h4 class="inline"\>Stars\:\<\/h4\>(.*?)\<\/div\>/ims; # this technically pulls 'stars', but that's what we're looking for anyway
