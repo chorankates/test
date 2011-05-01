@@ -268,6 +268,7 @@ sub get_table_for_printing {
                 <tr><td>season</td><td>$lh{season}</td></tr>\n
                 <tr><td>episode</td><td>$lh{episode}</td></tr>\n
                 <tr><td>title</td><td>$lh{title}</td></tr>\n
+                <tr><td>actors</td><td>$lh{actors}</td></tr>\n
                 <tr><td>genres</td><td>$lh{genres}</td></tr>\n
                 <tr><td>notes</td><td>$lh{notes}</td></tr>\n
                 <tr><td>added</td><td>$lh{added}</td></tr>\n
@@ -357,7 +358,7 @@ sub get_query_control {
     # get_query_control() - obfuscation to build the SQL query control so it can be called from anywhere. return an @ or $ of html
     my @results;
     
-    # # tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genres TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT
+    # # tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, actors TEXT, genres TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT
     # movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
     @results = (
         "<h3>new query</h3>",
@@ -372,6 +373,7 @@ sub get_query_control {
         "<tr><td>season #</td><td>", get_select('season'), "</td><td><input type='checkbox' name='use_season'></td></tr>\n",
         "<tr><td>episode #</td><td>", get_select('episode'), "</td><td><input type='checkbox' name='use_episode'></td></tr>\n",
         "<tr><td>episode title</td><td><input name='title'></td><td><input type='checkbox' name='use_title'></td></tr>\n",
+        "<tr><td>actors</td><td><input name='actors'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
         "<tr><td>genres</td><td>", get_select('genres'), "</td><td><input type='checkbox' name='use_genres'></td></tr>\n",
         "<tr><td>notes</td><td><input name='notes'></td><td><input type='checkbox' name='use_notes'></td></tr>\n",
         "<tr><td>released year</td><td>", get_select('released'), "</td><td><input type='checkbox' name='use_released'></td></tr>\n",
