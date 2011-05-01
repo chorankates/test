@@ -11,7 +11,7 @@ use 5.010;
 use lib 'lib/';
 use dex::util;
 
-use lib '/home/conor/Dropbox/perl/_pm/';
+use lib '/home/conor/Dropbox/perl/_pm';
 use ironhide;
 
 use Cwd;
