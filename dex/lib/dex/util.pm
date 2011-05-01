@@ -11,7 +11,7 @@ use URI::Escape;
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(log_error create_db nicetime cleanup_sql cleanup_uri cleanup_filename);
-our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql database_maintenance download_file);
+our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql database_maintenance download_file get_imdb get_wikipedia);
 
 # todo
 # now that we're collecting wikipedia urls for tv shows, it makes sense to abstract the urls based on show title to another table..
@@ -495,6 +495,108 @@ sub create_db {
     return $results;
 }
 
+sub get_wikipedia {
+	# get_wikipedia(\%file_info) - given %file_info, returns a hash of information about the first match found (or an empty hash for error)
+	my $href = shift;
+	my %file_info = %{$href};
+	my %h;
+	
+	my $search_url = $file_info{wikipedia}; # this is usually a direct link, not a search url
+	
+	return {} unless defined $search_url;
+	
+	my $worker = LWP::UserAgent->new();
+	   $worker->agent($dex::util::settings{browser}{useragent});
+	   $worker->timeout($dex::util::settings{browser}{timeout});
+	   
+	my $response = $worker->get($search_url);
+	
+	# stuff to parse out:
+	# genres, cover, wikipedia, released, actors
+	
+	return %h;
+}
+
+sub get_imdb {
+	# get_imdb(\%file_info) - given %file_info, returns a hash of information about the first match found (or an empty hash for error)
+	# TODO: update function so it can handle multiple matches -- though since this is a non-interactive crawler, how would we handle the logic?
+	my $href = shift;
+	my %file_info = %{$href};
+	my %h; # will contain information coming back from imdb
+
+	my $search_url = $file_info{imdb};
+	
+	return {} unless defined $search_url;
+	
+	my $worker = LWP::UserAgent->new();
+	   $worker->agent($dex::util::settings{browser}{useragent});
+	   $worker->timeout($dex::util::settings{browser}{timeout});
+	
+	# get the search result page
+	my $search_time_begin = Time::HiRes::gettimeofday();
+	my $response  = $worker->get($search_url);
+	my $search_time_end = Time::HiRes::gettimeofday();
+	print "      search took ", substr(($search_time_end - $search_time_begin), 0, 5), "s\n" if $dex::util::settings{verbose} ge 3;
+	
+	# we also need to download the cover image to $s{image_dir}
+	my @search_contents = $response->content;
+	
+	my $rel_link     = 'http://www.imdb.com';
+	my $title_path   = $1 if @search_contents ~~ /href="(\/title.*?)"/ig;
+	my $content_link = $rel_link . $title_path;
+	
+	# get the content result page
+	my $content_time_begin = Time::HiRes::gettimeofday();
+	$response = $worker->get($content_link);
+	my @results_contents = $response->content;
+	my $content_time_end = Time::HiRes::gettimeofday();
+	print "      results fetch took ", substr(($content_time_end - $content_time_begin), 0, 5), "s\n" if $dex::util::settings{verbose} ge 3;
+	
+	# extract basic information from @results_contents
+	$h{new_imdb}  = $content_link; # contains the actual address to the imdb page, not the search results
+	$h{released}  = $1 if @results_contents ~~ /\<span\>\(\<a\shref=".*?\/year\/.*\>(\d*?)\<\/a\>\)<\/span\>/ims;
+	$h{director}  = $1 if @results_contents ~~ /Director\:.*?"\>(.*?)\<\/a\>\<\/div\>/ims;
+	$h{www_cover} = $1 if @results_contents ~~ /\<a\s*onclick="\(new\sImage.*?\>\<img\ssrc="(.*?)".*?Poster"\s*\/\>\<\/a\>/ims; # need to download this file to $s{image_dir}, then set $h{cover} to the filename in $s{image_dir}
+	
+	return {} unless $h{new_imdb} and $h{released} and $h{director} and $h{www_cover};
+	
+	# extract extended information
+	my $download_filename = File::Spec->catfile($dex::util::settings{image_dir}, basename($file_info{ffp}));
+	   $download_filename =~ s/\..*?$/\.jpg/i;
+	if (! -f $download_filename) {
+		my $download_results  = download_file($h{www_cover}, $download_filename);
+		$h{cover} = ($download_results eq 0) ? $download_filename : "unable to download: $h{www_cover}";
+	} else {
+		$h{cover} = $download_filename;
+	}
+	
+	my @actors;
+	my $actors_str = $1 if @results_contents ~~ /\<h4 class="inline"\>Stars\:\<\/h4\>(.*?)\<\/div\>/ims; # this technically pulls 'stars', but that's what we're looking for anyway
+	my @actors_list = split(">", $actors_str);
+	
+	foreach (@actors_list) {
+	    push @actors, $1 if $_ =~ /(.*?)\<\/a$/;
+	}
+	
+	
+	$h{actors}    = join(', ', @actors); # CSV, since we're going to push into a SQLite DB anyway
+	
+	my @genres;
+	my $genres_str = $1 if @results_contents ~~ /\<h4 class="inline"\>Genres\:\<\/h4\>(.*?)\<\/div\>/ims;
+	my @genres_list = split(">", $genres_str); # don't know if this is right..
+	
+	## real men do it with a grep -- but i can't get this one to work right.. 
+	#@genres = grep { if ($_ =~ /(.*?)\<\/a$/) { return $1; } } @genres_list;
+	
+	foreach (@genres_list) {
+	    push @genres, $1 if $_ =~ /(.*?)\<\/a$/;
+	}
+	
+	$h{genres} = join(', ', @genres); # CSV
+	
+	return %h;
+}
+
 sub database_maintenance {
 	# database_maintenance () -- iterates all entries in $database and drops the UID unless -f $ffp, then tries to find wiki/imdb information about the remaining files, returns ($tv_removed, $tv_wiki_added, $movies_removed, $movie_imdb_added)
 	# might be faster to do this after indexing (but would require us to load the entire DB into memory to compare)
@@ -612,6 +714,8 @@ sub database_maintenance {
 			return (-1, $DBI::errstr) if defined $DBI::errstr;
 		}
 		
+		print "  done locating non-existent '$type'\n" if $dex::util::settings{verbose} ge 2;
+		
 		# get wikipedia/imdb information where we don't have it
 		foreach my $uid (keys %external_media) {
 			my $href = $external_media{$uid};
@@ -645,19 +749,19 @@ sub database_maintenance {
 				# haven't written the get_wikipedia() function yet
 				#print "    get_wikipedia($lh{title})\n" if $dex::util::settings{verbose} ge 1;
 				#my %tv_info = get_wikipedia(\%lh);
-				$query_success = 1; 
+				$query_success = 0;  # forcing failure for now
 				
 			}
 			
 			if ($query_success) {
 				# we got good info from imdb/wikipedia, add this to the db
-				my $results = put_sql($dex::util::settings, $lh{type}, \%lh);
+				my $results = put_sql($dex::util::settings{database}, $lh{type}, \%lh);
 			}
 			
 			return (-1, $DBI::errstr) if defined $DBI::errstr;
 		}
 		
-		print "  done locating non-existent '$type'\n" if $dex::util::settings{verbose} ge 2;
+		print "  done getting wikipedia/imdb information for '$type'\n" if $dex::util::settings{verbose} ge 2;
 		($query, $q) = (undef, undef); # don't want to key off of the last loop
 	}
 	
