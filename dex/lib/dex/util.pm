@@ -377,6 +377,25 @@ sub cleanup_sql {
 	return %h;
 }
 
+sub cleanup_uri {
+	# uri_cleanup($string, $type) -- returns a URI escaped version of $string based on $type
+	my $string = shift;
+	my $type   = shift;
+	my $results;
+	
+	#$results = URI::Escape::uri_escape($string); # this will give us %20, not +
+	if ($type eq 'imdb') {
+		$string =~ s/\s/\+/g; # turn ' 'into +
+	} elsif ($type eq 'wikipedia') {
+		$string =~ s/\s/_/g; # turn ' ' into _
+	}
+
+	$results = $string;
+
+	# we're already warning above, no need to duplicate it here
+
+	return $results;
+}
 
 sub create_db {
     # create_db($name) - creates a blank database ($name), returns 0 or an error message
@@ -540,8 +559,8 @@ sub get_external_link {
 		# s=tt means search for movie titles
 		# q=<query>
 		my $base_url = 'http://www.imdb.com/find?s=tt&q=';
-	    my $query = sql_cleanup($h{title}, 'out');
-		   $query = uri_cleanup($query, $site); #
+	    my $query = cleanup_sql($h{title}, 'out');
+		   $query = cleanup_uri($query, $site); #
 		
 		$url = $base_url . $query;
 		
@@ -561,26 +580,6 @@ sub get_external_link {
 	}
 	
 	return $url;
-}
-
-sub uri_cleanup {
-	# uri_cleanup($string, $type) -- returns a URI escaped version of $string based on $type
-	my $string = shift;
-	my $type   = shift;
-	my $results;
-	
-	#$results = URI::Escape::uri_escape($string); # this will give us %20, not +
-	if ($type eq 'imdb') {
-		$string =~ s/\s/\+/g; # turn ' 'into +
-	} elsif ($type eq 'wikipedia') {
-		$string =~ s/\s/_/g; # turn ' ' into _
-	}
-
-	$results = $string;
-
-	# we're already warning above, no need to duplicate it here
-
-	return $results;
 }
 
 sub nicetime {
