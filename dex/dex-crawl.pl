@@ -172,13 +172,13 @@ foreach my $ffp (sort keys %files) {
 	next if ($file_info{error}); # already logged a warning
 	
 	# don't know that we always want to do this here, but
-	if ($type eq 'tv' and $s{retrieve_wikipedia} and not (($file_info{genre}) and ($file_info{actors}))) {
+	if ($type eq 'tv' and $s{retrieve_wikipedia} and not (($file_info{genres}) and ($file_info{actors}))) {
 		# noop, don't have get_wikipedia() up and running
 		
 		#my %tv_info = get_wikipedia(\%file_info);
 		
 		print "DBGZ" if 0;
-	} elsif ($type eq 'movies' and $s{retrieve_imdb} and not (($file_info{actors}) and ($file_info{director}))) {
+	} elsif ($type eq 'movies' and $s{retrieve_imdb} and not (($file_info{genres}) and ($file_info{actors}))) {
 		# get information from imdb.com if retreive_imdb and we haven't gotten the information already
 		print "    get_imdb($file_info{title})\n" if $s{verbose} ge 1;
 		my %movie_info = get_imdb(\%file_info);
