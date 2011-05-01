@@ -7,6 +7,7 @@
 # need to add controls to force a new scan
 # need to turn table values in get_table_for_printing() into links to run searches on the same criteria
 # need to convert the single mode in get_table_for_printing() to be able to handle inline editing
+# add a 'popular searches' div underneath statistics including pre built queries for 20 most recently modified tv/movies, also try recently added (?)
 
 use strict;
 use warnings;
