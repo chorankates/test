@@ -298,7 +298,7 @@ sub get_imdb {
 	
 	# extract basic information from @results_contents
 	$h{new_imdb}  = $content_link; # contains the actual address to the imdb page, not the search results
-	$h{released}  = $1 if @results_contents ~~ /\<span\>\(\<a\shref=".*?\/year\/.*\>(.*?)\<\/a\>\)<\/span\>/ims;
+	$h{released}  = $1 if @results_contents ~~ /\<span\>\(\<a\shref=".*?\/year\/.*\>(\d*?)\<\/a\>\)<\/span\>/ims;
 	$h{director}  = $1 if @results_contents ~~ /Director\:.*?"\>(.*?)\<\/a\>\<\/div\>/ims;
 	$h{www_cover} = $1 if @results_contents ~~ /\<a\s*onclick="\(new\sImage.*?\>\<img\ssrc="(.*?)".*?Poster"\s*\/\>\<\/a\>/ims; # need to download this file to $s{image_dir}, then set $h{cover} to the filename in $s{image_dir}
 	
