@@ -558,7 +558,7 @@ sub get_imdb {
 	$h{director}  = $1 if @results_contents ~~ /Director\:.*?"\>(.*?)\<\/a\>\<\/div\>/ims;
 	$h{www_cover} = $1 if @results_contents ~~ /\<a\s*onclick="\(new\sImage.*?\>\<img\ssrc="(.*?)".*?Poster"\s*\/\>\<\/a\>/ims; # need to download this file to $s{image_dir}, then set $h{cover} to the filename in $s{image_dir}
 	
-	$h{notes}     = $1 if @results_contents ~~ /\<p\>..\<p\>([\w|\s|\.]*?)\<\/p\>..\<\/p\>/ims;       # this is a little brittle, but it's the short version of the summary on the next line
+	$h{notes}     = $1 if @results_contents ~~ /\<p\>..\<p\>([^\>|\<]*?)\<\/p\>..\<\/p\>/ims;         # this is a little brittle, but it's the short version of the summary on the next line
 	$h{summary}   = $1 if @results_contents ~~ /\<h2\>Storyline\<\/h2\>....\<p\>([^\<\>]*?)...\</ims; # this one is stronger, but also longer.. <3 daft punk
 	$h{notes} = $h{summary} unless defined $h{notes};
 	
@@ -740,6 +740,7 @@ sub database_maintenance {
 					$lh{cover}    = $movie_info{cover}    // 'unknown';
 					$lh{actors}   = $movie_info{actors}   // 'unknown';
 					$lh{genres}   = $movie_info{genres}   // 'unknown';
+					$lh{notes}    = $movie_info{notes}    // 'unknown';
 					
 					$query_success = 1;
 				} else {
