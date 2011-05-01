@@ -78,9 +78,9 @@ sub get_info_from_filename {
 		
 		$h{cover}    = 'unknown';
 		$h{imdb}     = get_external_link(\%h, 'imdb'); # this is just a link, another function will recurse through and populate genres/actors/director
-		$h{genres}    = 'unknown'; # for now, we'll parse this via the imdb address later
-		$h{actors}   = 'unknown'; # again, for now
-		$h{director} = 'unknown';
+		$h{genres}    = ''; # for now, we'll parse this via the imdb address later
+		$h{actors}   = ''; # again, for now
+		$h{director} = '';
 	
 		# tv returns on its own, but we rely on a fall through return.. why?
 		
@@ -97,9 +97,9 @@ sub get_info_from_filename {
 		}
 		
 		$h{released}  = ($ffp =~ /\((\d*)\)$/) ? $1 : 'unknown'; # tries to match <series name> - <'season' \d> (<year>)
-		$h{genres}    = 'unknown';
-		$h{cover}     = 'unknown'; # needs to be defined but have no value
-		$h{actors}    = 'unknown';
+		$h{genres}    = '';
+		$h{cover}     = ''; # needs to be defined but have no value
+		$h{actors}    = '';
 		
 		# why are we always getting 'n' when '0n' is passed in?
 		

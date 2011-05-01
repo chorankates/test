@@ -172,7 +172,7 @@ foreach my $ffp (sort keys %files) {
 	next if ($file_info{error}); # already logged a warning
 	
 	# don't know that we always want to do this here, but
-	if ($type eq 'tv' and $s{retrieve_wikipedia}) {
+	if ($type eq 'tv' and $s{retrieve_wikipedia} and not (($file_info{genre}) and ($file_info{actors}))) {
 		# noop, don't have get_wikipedia() up and running
 		
 		#my %tv_info = get_wikipedia(\%file_info);
