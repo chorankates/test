@@ -49,7 +49,7 @@ sub get_info_from_filename {
 
 	
 	if ($type =~ /movie/i) {
-		# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
+		# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
 		# Megamind (2010).avi
 		
 		my $title = $1 if $ffp =~ /.*\/(.*)\..*?$/;
@@ -77,15 +77,15 @@ sub get_info_from_filename {
 		$h{released}  = $year;
 		
 		$h{cover}    = 'unknown';
-		$h{imdb}     = get_external_link(\%h, 'imdb'); # this is just a link, another function will recurse through and populate genre/actors/director
-		$h{genre}    = 'unknown'; # for now, we'll parse this via the imdb address later
+		$h{imdb}     = get_external_link(\%h, 'imdb'); # this is just a link, another function will recurse through and populate genres/actors/director
+		$h{genres}    = 'unknown'; # for now, we'll parse this via the imdb address later
 		$h{actors}   = 'unknown'; # again, for now
 		$h{director} = 'unknown';
 	
 		# tv returns on its own, but we rely on a fall through return.. why?
 		
 	} elsif ($type =~ /tv/i) {
-		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
+		# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genres TEXT, notes TEXT, added TEXT, released TEXT
 		#my $count = $file =~ /-/g; # this will not work if there are -'s in the episode name
 		my @t = $file =~ /-/g;
 		my $count = (@t) ? $#t + 1 : 0; # lol @ typecasting
@@ -97,7 +97,7 @@ sub get_info_from_filename {
 		}
 		
 		$h{released}  = ($ffp =~ /\((\d*)\)$/) ? $1 : 'unknown'; # tries to match <series name> - <'season' \d> (<year>)
-		$h{genre}     = 'unknown';
+		$h{genres}     = 'unknown';
 		$h{cover}     = 'unknown'; # needs to be defined but have no value
 		
 		# why are we always getting 'n' when '0n' is passed in?
@@ -140,6 +140,13 @@ sub get_info_from_filename {
 		} else {
 			$h{error} = "unrecognized filename format: $ffp";
 			log_error($h{error});
+			return %h;
+		}
+		
+		if ($h{title} =~ /~/) {
+			$h{error} = "bad characters found in: $ffp";
+			log_error($h{error});
+			
 			return %h;
 		}
 		
@@ -249,13 +256,13 @@ sub get_sql {
             $h{$name} = $value; # this hash is special
             
         } elsif ($type eq 'tv') {
-            # $schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, wikipedia TEXT, cover TEXT added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_tv';
+            # $schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genres TEXT, notes TEXT, wikipedia TEXT, cover TEXT added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_tv';
 			my $u = $r[0];
 			$h{$u}{show}      = $r[1];
 			$h{$u}{season}    = $r[2];
 			$h{$u}{episode}   = $r[3];
 			$h{$u}{title}     = $r[4];
-			$h{$u}{genre}     = $r[5];
+			$h{$u}{genres}    = $r[5];
 			$h{$u}{notes}     = $r[6];
 			$h{$u}{wikipedia} = $r[7];
 			$h{$u}{cover}     = $r[8];
@@ -264,12 +271,12 @@ sub get_sql {
 			$h{$u}{ffp}       = $r[11];
 
 		} elsif ($type eq 'movies') {
-            # $schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_movies';
+            # $schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_movies';
             my $u = $r[0];
 			$h{$u}{title}    = $r[1];
 			$h{$u}{director} = $r[2];
 			$h{$u}{actors}   = $r[3];
-			$h{$u}{genre}    = $r[4];
+			$h{$u}{genres}   = $r[4];
 			$h{$u}{notes}    = $r[5];			
 			$h{$u}{imdb}     = $r[6];
 			$h{$u}{cover}    = $r[7];
@@ -312,23 +319,23 @@ sub put_sql {
 	if ($type =~ /tv/) {
 		$table = 'tbl_tv';
 		
-		# tv: uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, wikipedia TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
+		# tv: uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genres TEXT, notes TEXT, wikipedia TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
 		$query = $dbh->prepare("
 					INSERT
 					INTO $table
-					(uid, show, season, episode, title, genre, notes, wikipedia, cover, added, released, ffp)
-					VALUES ('$h{uid}', '$h{show}', '$h{season}', '$h{episode}', '$h{title}', '$h{genre}', '$h{notes}', '$h{wikipedia}', '$h{cover}', '$h{added}', '$h{released}', '$h{ffp}')
+					(uid, show, season, episode, title, genres, notes, wikipedia, cover, added, released, ffp)
+					VALUES ('$h{uid}', '$h{show}', '$h{season}', '$h{episode}', '$h{title}', '$h{genres}', '$h{notes}', '$h{wikipedia}', '$h{cover}', '$h{added}', '$h{released}', '$h{ffp}')
 					");
 
 		
 	} elsif ($type =~ /movie/) {
 		$table = 'tbl_movies';
 		
-		# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
+		# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
 		$query = $dbh->prepare("INSERT
 				       INTO $table
-				       (uid, title, director, actors, genre, notes, imdb, cover, added, released, ffp)
-				       VALUES ('$h{uid}', '$h{title}', '$h{director}', '$h{actors}', '$h{genre}', '$h{notes}', '$h{imdb}', '$h{cover}', '$h{added}', '$h{released}', '$h{ffp}')
+				       (uid, title, director, actors, genres, notes, imdb, cover, added, released, ffp)
+				       VALUES ('$h{uid}', '$h{title}', '$h{director}', '$h{actors}', '$h{genres}', '$h{notes}', '$h{imdb}', '$h{cover}', '$h{added}', '$h{released}', '$h{ffp}')
 							   ");
 		
 	} else {
@@ -422,9 +429,9 @@ sub create_db {
 		foreach my $tbl_name (@tables) {
 			my $schema;
 			
-			# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
-			$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT'                      if $tbl_name eq 'tbl_movies';
-			$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, wikipedia TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_tv';
+			# tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genres TEXT, notes TEXT, added TEXT, released TEXT
+			$schema = 'uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT'                      if $tbl_name eq 'tbl_movies';
+			$schema = 'uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genres TEXT, notes TEXT, wikipedia TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT' if $tbl_name eq 'tbl_tv';
 			$schema = 'uid TEXT PRIMARY KEY, name TEXT, value TEXT' if $tbl_name eq 'tbl_stats';
 			next unless $schema; # failsafe
 		
@@ -571,7 +578,7 @@ sub get_external_link {
 		# sample url = http://en.wikipedia.org/wiki/Nikita_(tv_series)
 		# always want to append '(tv series)' for best results
 		my $base_url = 'http://en.wikipedia.org/wiki/';
-		my $query = uri_cleanup($h{show}, $site); 
+		my $query = cleanup_uri($h{show}, $site); 
 		my $append = '_(tv_series)';
 		
 		$url = $base_url . $query  . $append;
