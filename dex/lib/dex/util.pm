@@ -15,6 +15,7 @@ our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql database_mainten
 
 # todo
 # now that we're collecting wikipedia urls for tv shows, it makes sense to abstract the urls based on show title to another table..
+# need to update get_imdb/wikipedia to store movie/episode summary in 'notes'
 
 sub get_info_from_filename {
 	# get_info_from_filename($ffp, $file, $type) -- returns a hash of information based on $ffp and $type (tv|movies)
@@ -56,7 +57,7 @@ sub get_info_from_filename {
 		my $year  = $2 if $ffp =~ /.*\/(.*?)\s?\((.*?)\)\..*?$/;
 		
 		$title =~ s/\s*\($year\)// if defined $year; # strip out ' ($year)'
-		$year = 'unknown' unless defined $year;
+		$year = 'not_set' unless defined $year;
 		
 		my @dots = $title =~ /\./g;
 		if (($title =~ /\[|\]/) or ($#dots gt 1)) {
@@ -76,11 +77,11 @@ sub get_info_from_filename {
 		$h{title} = $title;
 		$h{released}  = $year;
 		
-		$h{cover}    = 'unknown';
+		$h{cover}    = 'not_set';
 		$h{imdb}     = get_external_link(\%h, 'imdb'); # this is just a link, another function will recurse through and populate genres/actors/director
-		$h{genres}    = ''; # for now, we'll parse this via the imdb address later
-		$h{actors}   = ''; # again, for now
-		$h{director} = '';
+		$h{genres}   = 'not_set'; # for now, we'll parse this via the imdb address later
+		$h{actors}   = 'not_set'; # again, for now
+		$h{director} = 'not_set';
 	
 		# tv returns on its own, but we rely on a fall through return.. why?
 		
@@ -96,10 +97,10 @@ sub get_info_from_filename {
 			return %h;
 		}
 		
-		$h{released}  = ($ffp =~ /\((\d*)\)$/) ? $1 : 'unknown'; # tries to match <series name> - <'season' \d> (<year>)
-		$h{genres}    = '';
-		$h{cover}     = ''; # needs to be defined but have no value
-		$h{actors}    = '';
+		$h{released}  = ($ffp =~ /\((\d*)\)$/) ? $1 : 'not_set'; # tries to match <series name> - <'season' \d> (<year>)
+		$h{genres}    = 'not_set';
+		$h{cover}     = 'not_set'; 
+		$h{actors}    = 'not_set';
 		
 		# why are we always getting 'n' when '0n' is passed in?
 		
@@ -561,7 +562,7 @@ sub database_maintenance {
 				return (-1, "unknown table '$type'");
 			}
 
-			
+			$qh{type} = $type; # doing this for reference in %external_media
 			%qh = cleanup_sql(\%qh, 'out');
 			#$ffp =~ s/\^/'/g;
 		
@@ -579,16 +580,16 @@ sub database_maintenance {
 				# need to check to see if it has wiki entries or not
 				if ($type eq 'tv') {
 					next if -f $qh{cover}; # this is the best test
-					next if $qh{actors} ne '';
-					next if $qh{genres} ne '';
+					next if $qh{actors} ne 'not_set';
+					next if $qh{genres} ne 'not_set';
 					
 					$external_media{$qh{uid}} = \%qh;
 					
 				} elsif ($type eq 'movies') {
 					next if -f $qh{cover};
-					next if $qh{actors}   ne '';
-					next if $qh{director} ne '';
-					next if $qh{genres}   ne '';
+					next if $qh{actors}   ne 'not_set';
+					next if $qh{director} ne 'not_set';
+					next if $qh{genres}   ne 'not_set';
 					
 					$external_media{$qh{uid}} = \%qh;
 				}
