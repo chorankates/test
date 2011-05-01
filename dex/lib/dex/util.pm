@@ -558,6 +558,10 @@ sub get_imdb {
 	$h{director}  = $1 if @results_contents ~~ /Director\:.*?"\>(.*?)\<\/a\>\<\/div\>/ims;
 	$h{www_cover} = $1 if @results_contents ~~ /\<a\s*onclick="\(new\sImage.*?\>\<img\ssrc="(.*?)".*?Poster"\s*\/\>\<\/a\>/ims; # need to download this file to $s{image_dir}, then set $h{cover} to the filename in $s{image_dir}
 	
+	$h{notes}     = $1 if @results_contents ~~ /\<p\>..\<p\>([\w|\s|\.]*?)\<\/p\>..\<\/p\>/ims;       # this is a little brittle, but it's the short version of the summary on the next line
+	$h{summary}   = $1 if @results_contents ~~ /\<h2\>Storyline\<\/h2\>....\<p\>([^\<\>]*?)...\</ims; # this one is stronger, but also longer.. <3 daft punk
+	$h{notes} = $h{summary} unless defined $h{notes};
+	
 	return {} unless $h{new_imdb} and $h{released} and $h{director} and $h{www_cover};
 	
 	# extract extended information
@@ -664,7 +668,7 @@ sub database_maintenance {
 				return (-1, "unknown table '$type'");
 			}
 
-			$qh{type} = $type; # doing this for reference in %external_media
+			# $qh{type} = $type; # doing this for reference in %external_media -- just use $type
 			%qh = cleanup_sql(\%qh, 'out');
 			#$ffp =~ s/\^/'/g;
 		
@@ -723,7 +727,7 @@ sub database_maintenance {
 			my $query_success = 0;
 			
 			## traffic cop for movies/tv here
-			if ($lh{type} eq 'movies' and $dex::util::settings{retrieve_imdb}) {
+			if ($type eq 'movies' and $dex::util::settings{retrieve_imdb}) {
 				# need to try and get the wikipedia information
 				print "    get_imdb($lh{title})\n" if $dex::util::settings{verbose} ge 1;
 				my %movie_info = get_imdb(\%lh);
@@ -744,7 +748,7 @@ sub database_maintenance {
 					# $query_success = 0;
 				}
 				
-			} elsif ($lh{type} eq 'tv' and $dex::util::settings{retrieve_wikipedia}) {
+			} elsif ($type eq 'tv' and $dex::util::settings{retrieve_wikipedia}) {
 	
 				# haven't written the get_wikipedia() function yet
 				#print "    get_wikipedia($lh{title})\n" if $dex::util::settings{verbose} ge 1;
@@ -755,7 +759,7 @@ sub database_maintenance {
 			
 			if ($query_success) {
 				# we got good info from imdb/wikipedia, add this to the db
-				my $results = put_sql($dex::util::settings{database}, $lh{type}, \%lh);
+				my $results = put_sql($dex::util::settings{database}, $type, \%lh);
 			}
 			
 			return (-1, $DBI::errstr) if defined $DBI::errstr;
