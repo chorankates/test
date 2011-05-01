@@ -99,14 +99,16 @@ unless (-f $s{database}) {
 print Dumper(\%f) if $s{verbose} ge 2;
 print Dumper(\%s) if $s{verbose} ge 1;
 
-## remove files that no longer exist
-my @lt_remove_begin = localtime;
-# remove_non_existent_entries($database, \@media_types, \%media_tables, $verbosity)
-print "> remove_non_existent_entries($s{database}):\n" if $s{verbose} ge 1;
-my ($tv_count, $movies_count) = remove_non_existent_entries();
-warn "WARN:: error during removal: $movies_count" if $tv_count == -1;
-my @lt_remove_end = localtime;
-print "  done removing non-existent entries ($tv_count tv files, ", ($movies_count =~ /\d+/ ? $movies_count : -1), " movie files), took ", timetaken(\@lt_remove_begin, \@lt_remove_end), "\n" if $s{verbose} ge 1; # this line helps me understand why some people hate perl
+## remove files that no longer exist -- only in non-debug runs
+unless ($s{debug}) { 
+	my @lt_remove_begin = localtime;
+	# remove_non_existent_entries($database, \@media_types, \%media_tables, $verbosity)
+	print "> remove_non_existent_entries($s{database}):\n" if $s{verbose} ge 1;
+	my ($tv_count, $movies_count) = remove_non_existent_entries();
+	warn "WARN:: error during removal: $movies_count" if $tv_count == -1;
+	my @lt_remove_end = localtime;
+	print "  done removing non-existent entries ($tv_count tv files, ", ($movies_count =~ /\d+/ ? $movies_count : -1), " movie files), took ", timetaken(\@lt_remove_begin, \@lt_remove_end), "\n" if $s{verbose} ge 1; # this line helps me understand why some people hate perl
+}
 
 ## find all the files.. all the files
 my @lt_find_files_begin = localtime;
@@ -259,13 +261,27 @@ sub crawl_dir {
 	return %h;
 }
 
-sub get_external_information {
-	# get_external_information(\%hash) -
-}
 
-# should actually combine these two functions into something more generic
 sub get_wikipedia {
+	# get_wikipedia(\%file_info) - given %file_info, returns a hash of information about the first match found (or an empty hash for error)
+	my $href = shift;
+	my %file_info = %{$href};
+	my %h;
 	
+	my $search_url = $file_info{wikipedia}; # this is usually a direct link, not a search url
+	
+	return {} unless defined $search_url;
+	
+	my $worker = LWP::UserAgent->new();
+	   $worker->agent($s{browser}{useragent});
+	   $worker->timeout($s{browser}{timeout});
+	   
+	my $response = $worker->get($search_url);
+	
+	# stuff to parse out:
+	# genres, cover, wikipedia, released, actors
+	
+	return %h;
 }
 
 sub get_imdb {
@@ -303,21 +319,41 @@ sub get_imdb {
 	my $content_time_end = Time::HiRes::gettimeofday();
 	print "      results fetch took ", substr(($content_time_end - $content_time_begin), 0, 5), "s\n" if $s{verbose} ge 3;
 	
-	print "DBGZ" if 0;
-	
+	# extract basic information from @results_contents
+	$h{new_imdb}  = $content_link; # contains the actual address to the imdb page, not the search results
 	$h{released}  = $1 if @results_contents ~~ /\<span\>\(\<a\shref=".*?\/year\/.*\>(.*?)\<\/a\>\)<\/span\>/ims;
 	$h{director}  = $1 if @results_contents ~~ /Director\:.*?"\>(.*?)\<\/a\>\<\/div\>/ims;
 	$h{www_cover} = $1 if @results_contents ~~ /\<a\s*onclick="\(new\sImage.*?\>\<img\ssrc="(.*?)".*?Poster"\s*\/\>\<\/a\>/ims; # need to download this file to $s{image_dir}, then set $h{cover} to the filename in $s{image_dir}
 	
+	# extract extended information
 	my $download_filename = File::Spec->catfile($s{image_dir}, basename($file_info{ffp}));
 	   $download_filename =~ s/\..*?$/\.jpg/i;
 	my $download_results  = download_file($h{www_cover}, $download_filename);
 	$h{cover} = ($download_results eq 0) ? $download_filename : "unable to download: $h{www_cover}";
 	
+	my @actors;
+	my $actors_str = $1 if @results_contents ~~ /\<h4 class="inline"\>Stars\:\<\/h4\>(.*?)\<\/div\>/ims; # this technically pulls 'stars', but that's what we're looking for anyway
+	my @actors_list = split(">", $actors_str);
 	
-	$h{new_imdb}  = $content_link; # contains the actual address to the imdb page, not the search results
-	$h{actors}    = ''; # CSV, since we're going to push into a SQLite DB anyway
-	$h{genres}     = ''; # CSV
+	foreach (@actors_list) {
+	    push @actors, $1 if $_ =~ /(.*?)\<\/a$/;
+	}
+	
+	
+	$h{actors}    = join(', ', @actors); # CSV, since we're going to push into a SQLite DB anyway
+	
+	my @genres;
+	my $genres_str = $1 if @results_contents ~~ /\<h4 class="inline"\>Genres\:\<\/h4\>(.*?)\<\/div\>/ims;
+	my @genres_list = split(">", $genres_str); # don't know if this is right..
+	
+	## real men do it with a grep -- but i can't get this one to work right.. 
+	#@genres = grep { if ($_ =~ /(.*?)\<\/a$/) { return $1; } } @genres_list;
+	
+	foreach (@genres_list) {
+	    push @genres, $1 if $_ =~ /(.*?)\<\/a$/;
+	}
+	
+	$h{genres} = join(', ', @genres); # CSV
 	
 	return %h;
 }
