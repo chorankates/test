@@ -632,8 +632,11 @@ sub database_maintenance {
 					log_error("unable to get imdb information for '$lh{ffp}' from '$lh{imdb}'");
 				}
 				
-			} elsif ($lh{type} eq 'tv') {
-				
+			} elsif ($lh{type} eq 'tv' and $dex::util::settings{retrieve_wikipedia}) {
+	
+				# haven't written the get_wikipedia() function yet
+				#print "    get_wikipedia($lh{title})\n" if $dex::util::settings{verbose} ge 1;
+				#my %tv_info = get_wikipedia(\%lh);
 				$query_success = 1; 
 				
 			}

@@ -159,35 +159,7 @@ foreach my $ffp (sort keys %files) {
 	my %file_info = get_info_from_filename($ffp, $file, $type);
 	
 	next if ($file_info{error}); # already logged a warning
-	
-	# don't know that we always want to do this here, but
-	if ($type eq 'tv' and $s{retrieve_wikipedia}) {
-		# noop, don't have get_wikipedia() up and running
 		
-		#my %tv_info = get_wikipedia(\%file_info);
-		
-		print "DBGZ" if 0;
-	} elsif ($type eq 'movies' and $s{retrieve_imdb}) {
-		# get information from imdb.com if retreive_imdb and we haven't gotten the information already-- this won't work since we're already nexting if this md5 is known.. need to move this function out of this loop 
-		print "    get_imdb($file_info{title})\n" if $s{verbose} ge 1;
-		my %movie_info = get_imdb(\%file_info);
-		
-		if (keys %movie_info) {
-			# successful call, add information to %file_info (need to update the $files{$ffp}{imdb} entry to be the actual page, not search page)
-			$file_info{released} = $movie_info{released} // 'unknown';
-			$file_info{director} = $movie_info{director} // 'unknown';
-			$file_info{imdb}     = $movie_info{new_imdb} // $file_info{imdb};
-			$file_info{cover}    = $movie_info{cover}    // 'unknown';
-			$file_info{actors}   = $movie_info{actors}   // 'unknown';
-			$file_info{genres}   = $movie_info{genres}   // 'unknown';
-			
-		} else {
-			# unsuccessful call, throw a warning
-			log_error("unable to get imdb information for '$file' from '$files{$ffp}{imdb}");
-		}
-		
-	}
-	
 	## now add to the db
 	my $results = put_sql($s{database}, $type, \%file_info);
 	
