@@ -558,9 +558,11 @@ sub get_external_link {
 		# sample url = http://www.imdb.com/find?s=tt&q=indiana+jones
 		# s=tt means search for movie titles
 		# q=<query>
+		# need to do some cleanup
+		%h = cleanup_sql(\%h, 'out');
+		
 		my $base_url = 'http://www.imdb.com/find?s=tt&q=';
-	    my $query = cleanup_sql($h{title}, 'out');
-		   $query = cleanup_uri($query, $site); #
+	    my $query    = cleanup_uri($h{title}, $site); #
 		
 		$url = $base_url . $query;
 		
