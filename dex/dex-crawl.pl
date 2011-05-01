@@ -65,7 +65,7 @@ my (%f, %files, %s); # flags, results from dir_crawling, settings
 
 GetOptions(\%f, "help", "dir:s", "verbose:i", "database:s", "working_dir:s", "debug:i", "rescan:i");
 $s{$_} = $f{$_} foreach (keys %f);
-$s{image_dir} = File::Spec->catdir($s{working_dir}, "imdb_images");
+$s{image_dir} = File::Spec->catdir($s{working_dir}, "media_images");
 
 %dex::util::settings = %s; # excellent..
 
@@ -270,7 +270,7 @@ sub get_wikipedia {
 
 sub get_imdb {
 	# get_imdb(\%file_info) - given %file_info, returns a hash of information about the first match found (or an empty hash for error)
-	  # TODO: update function so it can handle multiple matches -- though since this is a non-interactive crawler, how would we handle the logic?
+	# TODO: update function so it can handle multiple matches -- though since this is a non-interactive crawler, how would we handle the logic?
 	my $href = shift;
 	my %file_info = %{$href};
 	my %h; # will contain information coming back from imdb
@@ -308,6 +308,13 @@ sub get_imdb {
 	$h{released}  = $1 if @results_contents ~~ /\<span\>\(\<a\shref=".*?\/year\/.*\>(.*?)\<\/a\>\)<\/span\>/ims;
 	$h{director}  = $1 if @results_contents ~~ /Director\:.*?"\>(.*?)\<\/a\>\<\/div\>/ims;
 	$h{www_cover} = $1 if @results_contents ~~ /\<a\s*onclick="\(new\sImage.*?\>\<img\ssrc="(.*?)".*?Poster"\s*\/\>\<\/a\>/ims; # need to download this file to $s{image_dir}, then set $h{cover} to the filename in $s{image_dir}
+	
+	my $download_filename = File::Spec->catfile($s{image_dir}, basename($file_info{ffp}));
+	   $download_filename =~ s/\..*?$/\.jpg/i;
+	my $download_results  = download_file($h{www_cover}, $download_filename);
+	$h{cover} = ($download_results eq 0) ? $download_filename : "unable to download: $h{www_cover}";
+	
+	
 	$h{new_imdb}  = $content_link; # contains the actual address to the imdb page, not the search results
 	$h{actors}    = ''; # CSV, since we're going to push into a SQLite DB anyway
 	$h{genres}     = ''; # CSV

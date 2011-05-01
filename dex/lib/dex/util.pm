@@ -10,8 +10,8 @@ use URI::Escape;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw(log_error create_db nicetime cleanup_sql);
-our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql remove_non_existent_entries);
+our @EXPORT_OK = qw(log_error create_db nicetime cleanup_sql cleanup_uri cleanup_filename);
+our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql remove_non_existent_entries download_file);
 
 # todo
 # now that we're collecting wikipedia urls for tv shows, it makes sense to abstract the urls based on show title to another table..
@@ -589,6 +589,24 @@ sub get_external_link {
 	}
 	
 	return $url;
+}
+
+sub download_file {
+	# download_file($url, $ffp) - downloads $url to $ffp, returns 0|1 for success|failure
+	my ($url, $ffp) = @_;
+	
+	my $worker = LWP::UserAgent->new();
+	   $worker->agent($dex::util::settings{browser}{useragent});
+	   $worker->timeout($dex::util::settings{browser}{timeout});
+	
+	my $request = HTTP::Request->new(GET => $url);
+	my $response = $worker->get($url, ':content_file' => $ffp);
+	
+	if ($response->is_success) {
+		return 0;
+	} else {
+		return 1;
+	}
 }
 
 sub nicetime {
