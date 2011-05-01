@@ -38,7 +38,29 @@ my (%d, %p, %s); # database, incoming parameters, settings
     function     => (param()) ? "executing function" : "waiting for input",
 
     results_limit => 500, # puts a hard cap on the number of results returned from any db query (applied after any LIMIT calls)
+    
+    # scope hacking, this needs to be kept up to date with dex-crawl.pl
+    dir     => {
+		tv 	=> [ '/media/pdisk1/tv/', ],
+		movies	=> [ '/media/pdisk2/movies/', ],
+	},
+
+	table   => {
+		tv	=> 'tbl_tv',
+		movies	=> 'tbl_movies',
+		stats => 'tbl_stats',
+	},
+	
+	media_types => [
+		'tv',
+		'movies',
+		#'mp3', # how can we incorporate this? generate html with folder.jpg?
+	],
+    
 );
+
+
+%dex::util::settings = %s; # excellent..
 
 $s{db} = $s{db_folder} . "dex.sqlite";
 

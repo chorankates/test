@@ -296,7 +296,13 @@ sub get_sql {
     
 	unless ($match_count == 0) {
 		# %h = cleanup_sql(\%h, 'out') unless $match_count == 0; # yeah, should probably fix this on the other side too
-		$h{$_} = cleanup_sql($h{$_}, 'out') foreach (keys %h); # here, we may have only 1 match, but still HoH
+		if($type eq 'stats') {
+			# stats is always a simple hash
+			%h = cleanup_sql(\%h, 'out'); 
+		} else {
+			# tv and movie are defined as HoH (even if only one match)
+			$h{$_} = cleanup_sql($h{$_}, 'out') foreach (keys %h); 
+		}
 	}
 	
 	
@@ -630,6 +636,7 @@ sub database_maintenance {
 				} else {
 					# unsuccessful call, throw a warning
 					log_error("unable to get imdb information for '$lh{ffp}' from '$lh{imdb}'");
+					# $query_success = 0;
 				}
 				
 			} elsif ($lh{type} eq 'tv' and $dex::util::settings{retrieve_wikipedia}) {
