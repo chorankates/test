@@ -242,7 +242,7 @@ sub get_table_for_printing {
             if ($mode eq 'multiple') {
                 # returns a vertical table with a limited number of attributes for each match
                 my %lh = %{$hash{$uid}};
-                # tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT
+                # tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genres TEXT, notes TEXT, added TEXT, released TEXT
                 
                 my $more = ""; # this needs to be a link to this entrys individual page (we know the uid, so just do a type='single' query for uid == \"$md5\")
                 
@@ -268,7 +268,7 @@ sub get_table_for_printing {
                 <tr><td>season</td><td>$lh{season}</td></tr>\n
                 <tr><td>episode</td><td>$lh{episode}</td></tr>\n
                 <tr><td>title</td><td>$lh{title}</td></tr>\n
-                <tr><td>genre</td><td>$lh{genre}</td></tr>\n
+                <tr><td>genres</td><td>$lh{genres}</td></tr>\n
                 <tr><td>notes</td><td>$lh{notes}</td></tr>\n
                 <tr><td>added</td><td>$lh{added}</td></tr>\n
                 <tr><td>wikipedia</td><td>$lh{wikipedia}</td></tr>\n
@@ -288,13 +288,13 @@ sub get_table_for_printing {
         } elsif ($type =~ /movies/) {
             #get_table_for_printing($s{db}, 'movies', 'multiple', 'ORDER BY added ASC LIMIT 10');
             if ($mode eq 'multiple') {
-                # movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
+                # movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
                 my %lh = %{$hash{$uid}};
                 
                 my $more = ""; # this needs to be a link to the entrys ...
                 
-                $str = "<tr><td><strong>title</strong></td><td><strong>genre</strong></td><td><strong>imdb</strong></td><td><strong>released</strong></td><td><strong>more</strong></td></tr>" if $processed_count == 0;
-                $str .= "<tr><td>$lh{title}</td><td>$lh{genre}</td><td>$lh{imdb}</td><td>$lh{released}</td><td>$more</td></tr>";
+                $str = "<tr><td><strong>title</strong></td><td><strong>genres</strong></td><td><strong>imdb</strong></td><td><strong>released</strong></td><td><strong>more</strong></td></tr>" if $processed_count == 0;
+                $str .= "<tr><td>$lh{title}</td><td>$lh{genres}</td><td>$lh{imdb}</td><td>$lh{released}</td><td>$more</td></tr>";
                 
                 print "DBGZ" if 0;
                 
@@ -303,7 +303,7 @@ sub get_table_for_printing {
                 my %lh = %{$hash{$uid}};
                 
                 # have to do it this way to do it abstractally and not write a ridiculous custom sort 
-                my @keys = ('title', 'director', 'actors', 'genre', 'notes', 'imdb', 'cover', 'added', 'released', 'ffp');
+                my @keys = ('title', 'director', 'actors', 'genres', 'notes', 'imdb', 'cover', 'added', 'released', 'ffp');
                 $str = "<tr><td><strong>attribute</strong></td><td><strong>value</strong></td></tr>\n<tr><td>uid</td><td>$uid</td></tr>\n"; # another downside..
                 foreach my $key (@keys) {
                     $str .= "<tr><td>$key</td><td>$lh{$key}</td></tr>\n";
@@ -357,8 +357,8 @@ sub get_query_control {
     # get_query_control() - obfuscation to build the SQL query control so it can be called from anywhere. return an @ or $ of html
     my @results;
     
-    # # tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genre TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT
-    # movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genre TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
+    # # tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genres TEXT, notes TEXT, added TEXT, released TEXT, ffp TEXT
+    # movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
     @results = (
         "<h3>new query</h3>",
         "<form action=/cgi-bin/dex.cgi>",
@@ -372,7 +372,7 @@ sub get_query_control {
         "<tr><td>season #</td><td>", get_select('season'), "</td><td><input type='checkbox' name='use_season'></td></tr>\n",
         "<tr><td>episode #</td><td>", get_select('episode'), "</td><td><input type='checkbox' name='use_episode'></td></tr>\n",
         "<tr><td>episode title</td><td><input name='title'></td><td><input type='checkbox' name='use_title'></td></tr>\n",
-        "<tr><td>genre</td><td>", get_select('genre'), "</td><td><input type='checkbox' name='use_genre'></td></tr>\n",
+        "<tr><td>genres</td><td>", get_select('genres'), "</td><td><input type='checkbox' name='use_genres'></td></tr>\n",
         "<tr><td>notes</td><td><input name='notes'></td><td><input type='checkbox' name='use_notes'></td></tr>\n",
         "<tr><td>released year</td><td>", get_select('released'), "</td><td><input type='checkbox' name='use_released'></td></tr>\n",
         "<tr><td>ffp</td><td><input name='ffp'></td><td><input type='checkbox' name='use_ffp'></td></tr>\n",
@@ -386,7 +386,7 @@ sub get_query_control {
         "<tr><td>movie title</td><td><input name='title'></td><td><input type='checkbox' name='use_title'></td></tr>\n",
         "<tr><td>director</td><td><input name='director'></td><td><input type='checkbox' name='use_director'></td></tr>\n",
         "<tr><td>actors</td><td><input name='actors'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
-        "<tr><td>genre</td><td>", get_select('genre'), "</td><td><input type='checkbox' name='use_genre'></td></tr>\n",
+        "<tr><td>genres</td><td>", get_select('genres'), "</td><td><input type='checkbox' name='use_genres'></td></tr>\n",
         "<tr><td>actors</td><td><input name='notes'></td><td><input type='checkbox' name='use_notes'></td></tr>\n",
         "<tr><td>actors</td><td><input name='actors'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
         "<tr><td>released year</td><td>", get_select('released'), "</td><td><input type='checkbox' name='use_released'></td></tr>\n",
@@ -424,7 +424,7 @@ sub get_select {
         $html .= "<option value='$_'>$_</option>" foreach (@ints);
         
         $html .= "</select>";
-    } elsif ($name =~ /genre/) {
+    } elsif ($name =~ /genres/) {
         my @genres = (
             'action',
             'animated',
