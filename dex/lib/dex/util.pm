@@ -311,12 +311,17 @@ sub get_sql {
 }
 
 sub put_sql {
-	# put_sql($database, $type, $href)  -- takes a hash of data and adds it to $database according to $type -- returns 0|1|2 for success|already known|failure
-	my ($database, $type, $href) = @_;
+	# put_sql($database, $type, $href, [update])  -- takes a hash of data and adds it to $database according to $type -- returns 0|1|2 for success|already known|failure
+	my $database = shift;
+	my $type = shift;
+	my $href = shift;
+	my $update = shift; # if this is set, update not insert
 	my %h = %{$href};
 	my $results = 0;
 	my $table;
 	my $query;
+
+	#$update = 1 if already_added($dex::util::settings{database}, $h{uid}, $type); # this is going to slow commits down, changing to argument spec
 
 	#$h{$_} = cleanup_sql($_)  foreach (keys %h);
 	%h = cleanup_sql(\%h, 'in'); # here we know we only have one hash key
@@ -328,24 +333,41 @@ sub put_sql {
 	if ($type =~ /tv/) {
 		$table = 'tbl_tv';
 		
-		# tv: uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, actors TEXT, genres TEXT, notes TEXT, wikipedia TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
-		$query = $dbh->prepare("
-					INSERT
+		if ($update) {
+			# do an update based on uid, this only works if we already have this uid.. should probably have some logic here
+			$query = $dbh->prepare("UPDATE
+					$table
+					SET uid='$h{uid}', show='$h{show}', episode='$h{episode}', title='$h{title}', actors='$h{actors}', genres='$h{genres}', notes='$h{notes}', wikipedia='$h{wikipedia}', cover='$h{cover}', added='$h{added}', released='$h{released}', ffp='$h{ffp}'
+					WHERE uid='$h{uid}'
+					");
+			
+		} else {
+			# tv: uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, actors TEXT, genres TEXT, notes TEXT, wikipedia TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
+			$query = $dbh->prepare("INSERT
 					INTO $table
 					(uid, show, season, episode, title, actors, genres, notes, wikipedia, cover, added, released, ffp)
 					VALUES ('$h{uid}', '$h{show}', '$h{season}', '$h{episode}', '$h{title}', '$h{actors}', '$h{genres}', '$h{notes}', '$h{wikipedia}', '$h{cover}', '$h{added}', '$h{released}', '$h{ffp}')
 					");
-
+		}
 		
 	} elsif ($type =~ /movie/) {
 		$table = 'tbl_movies';
 		
-		# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
-		$query = $dbh->prepare("INSERT
+		if ($update) { 
+			# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
+			$query = $dbh->prepare("UPDATE
+						$table
+				        SET uid='$h{uid}', title='$h{title}', director='$h{director}', actors='$h{actors}', genres='$h{genres}', notes='$h{notes}', imdb='$h{imdb}', cover='$h{cover}', added='$h{added}', released='$h{released}', ffp='$h{ffp}'
+						WHERE uid='$h{uid}'
+						");
+		} else {
+			# movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
+			$query = $dbh->prepare("INSERT
 				       INTO $table
 				       (uid, title, director, actors, genres, notes, imdb, cover, added, released, ffp)
 				       VALUES ('$h{uid}', '$h{title}', '$h{director}', '$h{actors}', '$h{genres}', '$h{notes}', '$h{imdb}', '$h{cover}', '$h{added}', '$h{released}', '$h{ffp}')
 							   ");
+		}
 		
 	} else {
 		warn "WARN:: unknown type '$type'";
@@ -503,7 +525,7 @@ sub get_wikipedia {
 	
 	my $search_url = $file_info{wikipedia}; # this is usually a direct link, not a search url
 	
-	return {} unless defined $search_url;
+	return %h unless defined $search_url;
 	
 	my $worker = LWP::UserAgent->new();
 	   $worker->agent($dex::util::settings{browser}{useragent});
@@ -526,7 +548,7 @@ sub get_imdb {
 
 	my $search_url = $file_info{imdb};
 	
-	return {} unless defined $search_url;
+	return %h unless defined $search_url;
 	
 	my $worker = LWP::UserAgent->new();
 	   $worker->agent($dex::util::settings{browser}{useragent});
@@ -542,8 +564,15 @@ sub get_imdb {
 	my @search_contents = $response->content;
 	
 	my $rel_link     = 'http://www.imdb.com';
-	my $title_path   = $1 if @search_contents ~~ /href="(\/title.*?)"/ig;
-	my $content_link = $rel_link . $title_path;
+	my $title_path   = $1 if @search_contents ~~ /href="(\/title\/tt\d*\/)"/ig;
+	
+	unless ($title_path) {
+		$h{error} = "error finding wikipedia page for $file_info{title} from $search_url";
+		log_error($h{error});
+		return %h;
+	}
+	
+	my $content_link = $rel_link . $title_path; 
 	
 	# get the content result page
 	my $content_time_begin = Time::HiRes::gettimeofday();
@@ -562,7 +591,12 @@ sub get_imdb {
 	$h{summary}   = $1 if @results_contents ~~ /\<h2\>Storyline\<\/h2\>....\<p\>([^\<\>]*?)...\</ims; # this one is stronger, but also longer.. <3 daft punk
 	$h{notes} = $h{summary} unless defined $h{notes};
 	
-	return {} unless $h{new_imdb} and $h{released} and $h{director} and $h{www_cover};
+	unless ($h{new_imdb} and $h{released} and $h{director} and $h{www_cover}) {
+		my $imdb = (defined $h{new_imdb}) ? "new: $h{new_imdb}" : "old: $h{imdb}";
+		$h{error} = "error gathering wikipedia information for $file_info{title} from $imdb";
+		log_error($h{error});
+		return %h;
+	}
 	
 	# extract extended information
 	my $download_filename = File::Spec->catfile($dex::util::settings{image_dir}, basename($file_info{ffp}));
@@ -683,21 +717,22 @@ sub database_maintenance {
 			}
 			
 			if (-f $qh{ffp}) {
-				# need to check to see if it has wiki entries or not
+				# need to check to see if it has wiki entries or not -- and if these values = unknown, it means we've tried to get them before and failed
 				if ($type eq 'tv') {
-					next if -f $qh{cover}; # this is the best test
-					next if $qh{actors} ne 'not_set';
-					next if $qh{genres} ne 'not_set';
-					
-					$external_media{$qh{uid}} = \%qh;
+					if (! -f $qh{cover} or $qh{actors} eq 'unknown' or $qh{genres} eq 'unknown') {
+						# log_error("incomplete information on $type: $qh{show} - $qh{title}"); # haven't written this functionality yet
+					} else {
+						$external_media{$qh{uid}} = \%qh;
+					}
 					
 				} elsif ($type eq 'movies') {
-					next if -f $qh{cover};
-					next if $qh{actors}   ne 'not_set';
-					next if $qh{director} ne 'not_set';
-					next if $qh{genres}   ne 'not_set';
-					
-					$external_media{$qh{uid}} = \%qh;
+					if (! -f $qh{cover} or $qh{actors} eq 'unknown' or $qh{director} eq 'unknown' or $qh{genres} eq 'unknown') {
+						log_error("incomplete information on $type: $qh{title}");
+					} elsif ($qh{actors} eq 'not_set' or $qh{director} eq 'not_set' or $qh{genres} eq 'not_set') {
+						$external_media{$qh{uid}} = \%qh;
+					} else {
+						# we already have information on this file, skip
+					}
 				}
 				
 				# done with checking for wikipedia/imdb entries
@@ -731,8 +766,10 @@ sub database_maintenance {
 				# need to try and get the wikipedia information
 				print "    get_imdb($lh{title})\n" if $dex::util::settings{verbose} ge 1;
 				my %movie_info = get_imdb(\%lh);
-		
-				if (keys %movie_info) {
+				
+				my $error = (defined $movie_info{error}) ? $movie_info{error} : 0;
+				
+				if (keys %movie_info and not $error) {
 					# successful call, add information to %file_info (need to update the $files{$ffp}{imdb} entry to be the actual page, not search page)
 					$lh{released} = $movie_info{released} // 'unknown';
 					$lh{director} = $movie_info{director} // 'unknown';
@@ -743,10 +780,15 @@ sub database_maintenance {
 					$lh{notes}    = $movie_info{notes}    // 'unknown';
 					
 					$query_success = 1;
+					$movies_added++;
 				} else {
 					# unsuccessful call, throw a warning
-					log_error("unable to get imdb information for '$lh{ffp}' from '$lh{imdb}'");
-					# $query_success = 0;
+					#log_error("unable to get imdb information for '$lh{ffp}' from '$lh{imdb}'");
+					$query_success = 1; # not actually a success,but we want to save 'unknown' data so we don't query this again
+					$lh{director} = 'unknown';
+					$lh{actors}    = 'unknown';
+					$lh{genres}    = 'unknown';
+					$lh{cover}     = 'unknown';
 				}
 				
 			} elsif ($type eq 'tv' and $dex::util::settings{retrieve_wikipedia}) {
@@ -756,11 +798,13 @@ sub database_maintenance {
 				#my %tv_info = get_wikipedia(\%lh);
 				$query_success = 0;  # forcing failure for now
 				
+				# don't forget to inc $tv_added
+				
 			}
 			
 			if ($query_success) {
 				# we got good info from imdb/wikipedia, add this to the db
-				my $results = put_sql($dex::util::settings{database}, $type, \%lh);
+				my $results = put_sql($dex::util::settings{database}, $type, \%lh, 1); # final 1 is to specify this to be an update put not insert
 			}
 			
 			return (-1, $DBI::errstr) if defined $DBI::errstr;
