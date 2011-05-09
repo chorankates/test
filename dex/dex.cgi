@@ -7,7 +7,7 @@
 # todo: make make_query_link() support chains/multiple string/type pairs
 # need to add controls to force a new scan
 # need to convert the single mode in get_table_for_printing() to be able to handle inline editing
-# add a 'popular searches' div underneath statistics including pre built queries for 20 most recently modified tv/movies, searches for popular genres (action, comedy), searches for popular actors/actresses (sean connery, harrison ford)
+
 
 use strict;
 use warnings;
@@ -166,7 +166,7 @@ sub html_start {
         start_html(
             	-title=> "dex.cgi - $s{function}",
             	-text   => "black",
-		-style => { src => $s{host} . '/default.css' }
+		-style => { src => $s{host} . '/dex.css' }
         ),
         "<div class=\"header\" align=\"right\"><h3><a href=\"",
         $s{host}, "/cgi-bin/dex.cgi", 
@@ -291,13 +291,13 @@ sub get_table_for_printing {
 
             # need to strip leading 0s?
             
-            my $show_image_link = make_query_link($lh{show}, 'show', $lh{image_uri});
-            my $show_text_link  = make_query_link($lh{show}, 'show');
-            my $season_link     = make_query_link($lh{season}, 'season'); # multiple queries would be cool here, could specify show AND season
-            my $episode_link    = make_query_link($lh{episode}, 'epsiode'); # this is kind of useless either way, but we can't not turn into a link
-            my $title_link      = make_query_link($lh{title}, 'title', $lh{title}); # this is mostly useless, but could find some cool intersections
-            my $released_link   = make_query_link($lh{released}, 'released');
-            my $self_link       = make_query_link($uid, 'uid', 'moar');
+            my $show_image_link = make_query_link($lh{show}, 'show', 'tv', $lh{image_uri});
+            my $show_text_link  = make_query_link($lh{show}, 'show', 'tv');
+            my $season_link     = make_query_link($lh{season}, 'season', 'tv'); # multiple queries would be cool here, could specify show AND season
+            my $episode_link    = make_query_link($lh{episode}, 'epsiode', 'tv'); # this is kind of useless either way, but we can't not turn into a link
+            my $title_link      = make_query_link($lh{title}, 'title', 'tv', $lh{title}); # this is mostly useless, but could find some cool intersections
+            my $released_link   = make_query_link($lh{released}, 'released', 'tv');
+            my $self_link       = make_query_link($uid, 'uid', 'moar', 'tv');
             my $wiki_link       = "<a href='$lh{wikipedia}'>$lh{wikipedia}</a>";
 
             if ($mode eq 'multiple') {
@@ -346,25 +346,25 @@ sub get_table_for_printing {
             
             # need to strip leading 0s ?
             
-            my $movie_image_link = make_query_link($lh{title}, 'title', $lh{image_uri});
-            my $movie_text_link  = make_query_link($lh{title}, 'title');
-            my $director_link    = make_query_link($lh{director}, 'director');
+            my $movie_image_link = make_query_link($lh{title}, 'title', 'movies', $lh{image_uri});
+            my $movie_text_link  = make_query_link($lh{title}, 'title', 'movies');
+            my $director_link    = make_query_link($lh{director}, 'director', 'movies');
             
             my @genres = split(",", $lh{genres});
             my $genres_link;
             foreach my $genre (@genres) {
-                $genres_link .= make_query_link($genre, 'genres') . " ";
+                $genres_link .= make_query_link($genre, 'genres', 'movies') . " ";
             }
             
             my @actors = split(",", $lh{actors});
             my $actors_link;
             foreach my $actor (@actors) {
-                $actors_link .= make_query_link($actor, 'actors') . " ";
+                $actors_link .= make_query_link($actor, 'actors', 'movies') . " ";
             }
             
-            my $released_link   = make_query_link($lh{released}, 'released');
+            my $released_link   = make_query_link($lh{released}, 'released', 'movies');
             my $imdb_link       = "<a href='$lh{imdb}' target='_new'>$lh{imdb}</a>";
-            my $self_link       = make_query_link($lh{uid}, 'uid', 'moar');                
+            my $self_link       = make_query_link($lh{uid}, 'uid', 'movies', 'moar');                
             
             if ($mode eq 'multiple') {
                 # movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
@@ -426,14 +426,59 @@ sub get_stats_div {
     my $html;
 
     
-    $html = "<div class='floater'>";
+    $html = "<div class='floater_stats'>";
     
     $html .= get_table_for_printing($s{db}, 'stats');
+    
+    $html .= get_query_div(); # actually returns a table...
     
     $html .= "</div>";
     
     return $html;
 }
+
+sub get_query_div {
+    # get_query_div() - returns an HTML string for the <div> containing popular queries
+    my $html;
+    
+    my %q = (
+        a => {
+            string => 'Harrison Ford',
+            type   => 'actors',
+            media  => 'movies',
+        },
+        b => {
+            string => 'Star Wars',
+            type   => 'title',
+            media  => 'movies',
+        },
+        c => {
+            string => 'comedy',
+            type   => 'genres',
+            media  => 'movies',
+        },
+        d => {
+            string => 'Sean Connery',
+            type   => 'actors',
+            media  => 'movies',
+        }
+    );
+    
+    
+    # searches for popular genres (action, comedy), searches for popular actors/actresses (sean connery, harrison ford)
+    
+    
+    $html = "<br><table align='right' border=0><tr><td>frequently used:</td></tr>";
+    
+    foreach my $query (%q) {
+        $html .= "<tr><td>" . make_query_link($q{$query}{string}, $q{$query}{type}, $q{$query}{media}) . "</tr></td>";
+    }
+    
+    $html .= "</table>";
+    
+    return $html;
+}
+
 
 sub get_query_control {
     # get_query_control() - obfuscation to build the SQL query control so it can be called from anywhere. return an @ or $ of html
@@ -543,9 +588,9 @@ sub get_select {
 
 sub make_query_link {
     # make_query_link($string, $type, $text) - returns a link query for a single string/type pair
-    my ($string, $type, $text) = @_;
+    my ($string, $type, $media, $text) = @_;
     $text = $string unless defined $text; # makes $text an optional parameter
-    my $uri = $s{cgi_address} . "?function=query";
+    my $uri = $s{cgi_address} . "?function=query&media=$media";
     
     $uri .= "&$type=$string";
     $uri .= "&use_" . $type . "=1";
