@@ -42,10 +42,6 @@ sub get_info_from_filename {
 	# this is kind of cheating.. and we're not using this in the schema (for now)
 	my $tmp_ffp = $ffp;
 	
-	my $rel_str = join("|", @{$dex::util::settings{dir}{$type}});
-	$tmp_ffp =~ s/\Q$rel_str//;
-	$h{relpath} = $tmp_ffp;
-	
 	$h{ffp} = $ffp;
 
 	
