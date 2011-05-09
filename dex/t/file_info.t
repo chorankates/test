@@ -1,6 +1,8 @@
 #!/usr/bin/perl -w
 # file_info.t -- tests for get_info_from_filename() in dex::util
 
+# this is a bad set of tests.. they will only catch the most flagrant bugs
+
 use strict;
 use warnings;
 
@@ -18,8 +20,8 @@ my %static_names = (
     'Burn Notice - 2 - 11 - Missing a prepended zero in series' => '/media/pdisk1/tv/Burn Notice/Burn Notice - Season 02/',
     'Burn Notice - 02 - 09 - Missing prepended zero in episode' => '/media/pdisk1/tv/Burn Notice/Burn Notice - Season 02/',
     'Burn Notice - 02 - 14 - This Episode Name has a - in it' => '/media/pdisk1/tv/Burn Notice/Burn Notice - Season 01/',
-    'Foo - Bar', => '/media/pdisk1/tv/Foo/',
-    'Archer - 04 - Not enough information' => '/media/pdisk1/tv/Archer/Archer - Season 02/',
+    #'Foo - Bar', => '/media/pdisk1/tv/Foo/',
+    #'Archer - 04 - Not enough information' => '/media/pdisk1/tv/Archer/Archer - Season 02/',
     '24 - 07 - 24 - 7 a.m. - 8 a.m..avi' => '/media/pdisk1/tv/24/24 - Season 07/24 - 07 - 24 - 7 a.m. - 8 a.m..avi', # we can fix this by using @a[3...] as $episode_title
     'The X-Files - 04 - 05 - This is a test.avi' => '/media/pdisk1/tv/The X-Files/The X-Files - Season 04/', # we can fix this one by saying that $show is based on the foldername off of the root and stripping that out of the match text
 );
@@ -41,15 +43,15 @@ foreach my $name (keys %names) {
     my %results = get_info_from_filename($base_dir, $name, $type);
     
     ##need to do subtests here
-    subtest "$name" => sub {
+    subtest $name => sub {
         is(defined $results{show},    1, 'show title defined');
         is(defined $results{title},   1, 'episode title defined');
         is(defined $results{season},  1, 'season # defined');
         is(defined $results{episode}, 1, 'episode # defined');
         is(defined $results{ctime},   1, 'added ctime defined');
         is(defined $results{uid},     1, 'UID defined');
-        is(defined $results{error},   0, 'error: $results{error}');
-    }
+        fail ("error detected: $results{error}") if defined $results{error};
+    };
     
 }
 
