@@ -4,8 +4,8 @@
 # todo
 # need to hook up search buttons (really just start writing the functions other than the landing page)
 #  details page -- individual
+# todo: make make_query_link() support chains/multiple string/type pairs
 # need to add controls to force a new scan
-# need to turn table values in get_table_for_printing() into links to run searches on the same criteria
 # need to convert the single mode in get_table_for_printing() to be able to handle inline editing
 # add a 'popular searches' div underneath statistics including pre built queries for 20 most recently modified tv/movies, searches for popular genres (action, comedy), searches for popular actors/actresses (sean connery, harrison ford)
 
@@ -17,6 +17,8 @@ use CGI ':standard';
 use CGI::Carp 'fatalsToBrowser'; # dbgz
 use Data::Dumper;
 use DBD::SQLite;
+use File::Basename;
+require File::Spec;
 use Time::HiRes;
 
 use lib '/home/conor/Dropbox/perl/_pm';
@@ -32,6 +34,9 @@ my (%d, %p, %s); # database, incoming parameters, settings
 
 %s = (
     host         => "http://192.168.1.122",
+    #host         => get_ip(),
+    host_dir     => '/dex/',
+    cgi_dir      => '/cgi-bin/',
     
     db_folder    => "/home/conor/dex/", # having www-data permission issues when trying to updated the DB in Dropbox
     db           => "", # dynamically defined below
@@ -62,8 +67,10 @@ my (%d, %p, %s); # database, incoming parameters, settings
 
 
 %dex::util::settings = %s; # excellent..
-
-$s{db} = $s{db_folder} . "dex.sqlite";
+$s{cgi_address}   = $s{host} . $s{cgi_dir} . basename($0);
+$s{image_dir_uri} = $s{host} . $s{host_dir} . "media_images/";
+$s{image_dir}     = $s{db_folder} . "media_images/";
+$s{db}            = $s{db_folder} . "dex.sqlite";
 
 ## global headers
 html_start();
@@ -89,7 +96,7 @@ unless (param()) {
     
     print "<ul>";
     foreach (@information) {
-	print "<li>$_</li>";
+        print "<li>$_</li>";
     } print ("</ul>");
     
     # this is good code, but needs to be massaged before including it
@@ -98,7 +105,8 @@ unless (param()) {
     #print "&nbsp;" x 10 . "<a href='" . $s{host} . "/cgi-bin/dico-wrapper.pl?function=query&builtin=most-recent&ceiling=100&use_ceiling=on&use_builtin=on'>100 more recent additions</a>..";
     
     print "<br>";
-    my $recent_sql = 'ORDER BY show DESC LIMIT 10';
+    #my $recent_sql = 'ORDER BY show DESC LIMIT 10';
+    my $recent_sql = 'ORDER BY added DESC LIMIT 5';
     print h2("sample sql: " . $recent_sql);
     
     # get the last ten tv entries
@@ -265,20 +273,39 @@ sub get_table_for_printing {
         my $uid = $_;
         my $str;
         
+        my %lh = %{$hash{$uid}} if $type ne 'stats'; # hacky..
+
+        # if we have an image, use that instead of the show title 
+        if ($lh{cover} ne 'unknown' and $lh{cover} ne 'not_set' and -f $lh{cover}) {
+            my $link = basename($lh{cover});
+               $link = $s{image_dir_uri} . $link;
+            $lh{image_uri} = "<img src='$link'>";
+        } else {
+            # default image to display
+            my $link = $s{image_dir_uri} . "default.jpg";
+            $lh{image_uri} = "<img src='$link'>";
+        }        
+        
         if ($type =~ /tv/) {
             #get_table_for_printing($s{db}, 'tv', 'multiple', 'ORDER BY added ASC LIMIT 10');
+
+            # need to strip leading 0s?
+            
+            my $show_image_link = make_query_link($lh{show}, 'show', $lh{image_uri});
+            my $show_text_link  = make_query_link($lh{show}, 'show');
+            my $season_link     = make_query_link($lh{season}, 'season'); # multiple queries would be cool here, could specify show AND season
+            my $episode_link    = make_query_link($lh{episode}, 'epsiode'); # this is kind of useless either way, but we can't not turn into a link
+            my $title_link      = make_query_link($lh{title}, 'title', $lh{title}); # this is mostly useless, but could find some cool intersections
+            my $released_link   = make_query_link($lh{released}, 'released');
+            my $self_link       = make_query_link($uid, 'uid', 'moar');
+            my $wiki_link       = "<a href='$lh{wikipedia}'>$lh{wikipedia}</a>";
+
             if ($mode eq 'multiple') {
                 # returns a vertical table with a limited number of attributes for each match
-                my %lh = %{$hash{$uid}};
                 # tv: 		uid TEXT PRIMARY KEY, show TEXT, season NUMERIC, episode NUMERIC, title TEXT, genres TEXT, notes TEXT, added TEXT, released TEXT
                 
-                my $more = ""; # this needs to be a link to this entrys individual page (we know the uid, so just do a type='single' query for uid == \"$md5\")
-                
-                # if we have an image, use that instead of the show title -- we should probably have a different test here..
-                $lh{show} = "<img src='$lh{cover}'>" if $lh{cover} ne 'unknown';
-                
                 $str = "<tr><td><strong>show</strong></td><td><strong>season #</strong></td><td><strong>episode #</strong></td><td><strong>title</strong></td><td><strong>released</strong></td><td>more</td></tr>\n" if $processed_count == 0;
-                $str .= "<tr><td>$lh{show}</td><td>$lh{season}</td><td>$lh{episode}</td><td>$lh{title}</td><td>$lh{released}</td><td>$more</td></tr>";
+                $str .= "<tr><td>$show_image_link<br>$show_text_link</td><td>$season_link</td><td>$episode_link</td><td>$title_link</td><td>$released_link</td><td>$self_link</td></tr>";
                 
                 print "DBGZ" if 0;
                 
@@ -288,10 +315,10 @@ sub get_table_for_printing {
                     warn "WARN:: weird datatype";
                     next;
                 }
-                my %lh = %{$hash{$uid}};
                 
-                $str = "<img src='$lh{cover}'><br>\n<tr><td><strong>attribute</strong></td><td><strong>value</strong></td></tr>\n
-                <tr><td>uid</td><td>$lh{uid}</td></tr>\n
+                $str = "<tr><td>$lh{image_uri}</td><td>&nbsp;</td></tr>\n
+                <tr><td><strong>attribute</strong></td><td><strong>value</strong></td></tr>\n
+                <tr><td>uid</td><td>$uid</td></tr>\n
                 <tr><td>show</td><td>$lh{show}</td></tr>\n
                 <tr><td>season</td><td>$lh{season}</td></tr>\n
                 <tr><td>episode</td><td>$lh{episode}</td></tr>\n
@@ -300,9 +327,9 @@ sub get_table_for_printing {
                 <tr><td>genres</td><td>$lh{genres}</td></tr>\n
                 <tr><td>notes</td><td>$lh{notes}</td></tr>\n
                 <tr><td>added</td><td>$lh{added}</td></tr>\n
-                <tr><td>wikipedia</td><td>$lh{wikipedia}</td></tr>\n
-                <tr><td>released</td><td><$lh{released}/td></tr>\n
-                <tr><td>ffp</td><td><$lh{ffp}/td></tr>\n
+                <tr><td>wikipedia</td><td>$wiki_link</td></tr>\n
+                <tr><td>released</td><td>$lh{released}</td></tr>\n
+                <tr><td>ffp</td><td>$lh{ffp}</td></tr>\n
                 ";
                 
                 #$str .= "<tr><td>$_</td><td>$hash{$_}</td></tr>" foreach keys <-- this is the way forward
@@ -316,27 +343,53 @@ sub get_table_for_printing {
             
         } elsif ($type =~ /movies/) {
             #get_table_for_printing($s{db}, 'movies', 'multiple', 'ORDER BY added ASC LIMIT 10');
+            
+            # need to strip leading 0s ?
+            
+            my $movie_image_link = make_query_link($lh{title}, 'title', $lh{image_uri});
+            my $movie_text_link  = make_query_link($lh{title}, 'title');
+            my $director_link    = make_query_link($lh{director}, 'director');
+            
+            my @genres = split(",", $lh{genres});
+            my $genres_link;
+            foreach my $genre (@genres) {
+                $genres_link .= make_query_link($genre, 'genres') . " ";
+            }
+            
+            my @actors = split(",", $lh{actors});
+            my $actors_link;
+            foreach my $actor (@actors) {
+                $actors_link .= make_query_link($actor, 'actors') . " ";
+            }
+            
+            my $released_link   = make_query_link($lh{released}, 'released');
+            my $imdb_link       = "<a href='$lh{imdb}' target='_new'>$lh{imdb}</a>";
+            my $self_link       = make_query_link($lh{uid}, 'uid', 'moar');                
+            
             if ($mode eq 'multiple') {
                 # movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
-                my %lh = %{$hash{$uid}};
-                
-                my $more = ""; # this needs to be a link to the entrys ...
                 
                 $str = "<tr><td><strong>title</strong></td><td><strong>genres</strong></td><td><strong>imdb</strong></td><td><strong>released</strong></td><td><strong>more</strong></td></tr>" if $processed_count == 0;
-                $str .= "<tr><td>$lh{title}</td><td>$lh{genres}</td><td>$lh{imdb}</td><td>$lh{released}</td><td>$more</td></tr>";
+                $str .= "<tr><td>$movie_image_link<br>$movie_text_link</td><td>$genres_link</td><td>$imdb_link</td><td>$released_link</td><td>$self_link</td></tr>";
                 
                 print "DBGZ" if 0;
                 
             } elsif ($mode eq 'single') {
                 
-                my %lh = %{$hash{$uid}};
-                
                 # have to do it this way to do it abstractally and not write a ridiculous custom sort 
-                my @keys = ('title', 'director', 'actors', 'genres', 'notes', 'imdb', 'cover', 'added', 'released', 'ffp');
-                $str = "<tr><td><strong>attribute</strong></td><td><strong>value</strong></td></tr>\n<tr><td>uid</td><td>$uid</td></tr>\n"; # another downside..
-                foreach my $key (@keys) {
-                    $str .= "<tr><td>$key</td><td>$lh{$key}</td></tr>\n";
-                }
+                $str = "<tr><td>$lh{image_uri}</td><td>&nbsp;</td></tr>\n
+                <tr><td><strong>attribute</strong></td><td><strong>value</strong></td></tr>\n
+                <tr><td>uid</td><td>$uid</td></tr>\n
+                <tr><td>title</td><td>$movie_text_link</td></tr>\n
+                <tr><td>director</td><td>$director_link</td></tr>\n
+                <tr><td>actors</td><td>$actors_link</td></tr>\n
+                <tr><td>genres</td><td>$genres_link</td></tr>\n
+                <tr><td>notes</td><td>$lh{notes}</td></tr>\n
+                <tr><td>imdb</td><td>$imdb_link</td></tr>\n
+                <tr><td>released</td><td>$released_link</td></tr>\n
+                <tr><td>ffp</td><td>$lh{ffp}</td></tr>\n 
+                ";
+
                 
                 # should we last here?
                 
@@ -486,3 +539,19 @@ sub get_select {
     return $html;
 }
 
+# my $title = make_query_link($lh{title}, 'title');
+
+sub make_query_link {
+    # make_query_link($string, $type, $text) - returns a link query for a single string/type pair
+    my ($string, $type, $text) = @_;
+    $text = $string unless defined $text; # makes $text an optional parameter
+    my $uri = $s{cgi_address} . "?function=query";
+    
+    $uri .= "&$type=$string";
+    $uri .= "&use_" . $type . "=1";
+    
+    my $pre = "<a href='";
+    my $post = "'>$text</a>";
+    
+    return $pre . $uri . $post;
+}
