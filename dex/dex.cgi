@@ -5,8 +5,10 @@
 # need to hook up search buttons (really just start writing the functions other than the landing page)
 #  details page -- individual
 # todo: make make_query_link() support chains/multiple string/type pairs
-# need to add controls to force a new scan
 # need to convert the single mode in get_table_for_printing() to be able to handle inline editing
+# admin page
+    # add a way to view errors
+    # need to add controls to force a new scan
 
 
 use strict;
@@ -41,6 +43,7 @@ my (%d, %p, %s); # database, incoming parameters, settings
     db_folder    => "/home/conor/dex/", # having www-data permission issues when trying to updated the DB in Dropbox
     db           => "", # dynamically defined below
     
+    error_file         => "error_dex-crawl.log", # switching to a single log file
     function     => (param()) ? "executing function" : "waiting for input",
 
     results_limit => 500, # puts a hard cap on the number of results returned from any db query (applied after any LIMIT calls)
@@ -81,15 +84,17 @@ unless (param()) {
     # no params, build the start page
     print (h2("information"), "<ul>");
     
-    my $cron    = "<br>&nbsp;&nbsp;&nbsp;" . join("<br>&nbsp;&nbsp;&nbsp;",cronread("dex"));
-    my $db_link = $s{host} . "/dex/dex.sqlite"; # previous solution was: just ran 'link /home/conor/Dropbox/perl/_7/_dico/results.sqlite /home/conor/drop/dico_results.sqlite'
-    my @db_file = stat $s{db};
-    my $db_size = nicesize($db_file[7]);
+    my $cron       = "<br>&nbsp;&nbsp;&nbsp;" . join("<br>&nbsp;&nbsp;&nbsp;",cronread("dex"));
+    my $db_link    = $s{host} . "/dex/dex.sqlite"; # previous solution was: just ran 'link /home/conor/Dropbox/perl/_7/_dico/results.sqlite /home/conor/drop/dico_results.sqlite'
+    my $admin_link = $s{cgi_address} . '?function=admin';
+    my @db_file    = stat $s{db};
+    my $db_size    = nicesize($db_file[7]);
     
     my @information = (
         "dex is a media indexing/research system combining Perl, SQLite and a little HTML/CSS",
         "currently all queries parameters are boolean ANDs",
         "database <a href=$db_link>here</a> ($db_size)",
+        "administration <a href=$admin_link>here</a>",
         #"test-* functions may ignore specifications in 'new poke' table, <a href=$s_link>RTFS</a>",
 	"/etc/crontab: $cron",
     );
@@ -139,27 +144,56 @@ unless (param()) {
         print get_table_for_printing($s{db}, 'movies', 'single', 'WHERE uid == \'16153ca725d14826ed3857cf08996121\'');
     }
     
-    # build a SQL query
-    my @query;
-    foreach my $param (keys %p) {
-        next if $param eq 'function';
-        next if $param eq 'media';
-        next if $param =~ /use_/; # i know, but watch
-        push @query, "$param LIKE '%$p{$param}%'" if $p{'use_'. $param};
-    }
-    
-    my $query = 'WHERE ' . join(" and ", @query);
-    
-    print h2("query: $query");
-    
     # sub traffic cop
     if ($p{function} =~ /query/i) {
+            # build a SQL query
+        my @query;
+        foreach my $param (keys %p) {
+            next if $param eq 'function';
+            next if $param eq 'media';
+            next if $param =~ /use_/; # i know, but watch
+            push @query, "$param LIKE '%$p{$param}%'" if $p{'use_'. $param};
+        }
+        
+        my $query = 'WHERE ' . join(" and ", @query);
+        print h2("query: $query");
+        
         my $mode = ($p{uid} and $p{use_uid}) ? 'single' : 'multiple'; # if match_count returned from the get_sql() call == 1, we'll adapt << maybe
         my $media = $p{media};
         
         print get_table_for_printing($s{db}, $media, $mode, $query);
+        
+        # end of query page
+        
+    } elsif ($p{function} eq 'admin') {
+        # administration page displays error log -- and allows for a rescan (not yet)
+        my $fh;
+        my $lresults;
+        open ($fh, '<', $s{db_folder} . '/' . $s{error_file}) or $lresults = $!;
+        if ($lresults) {
+            dex::util::log_error("error opening error file '$s{error_file}' (yo dawg): $lresults");
+        } else {
+            my @c = <$fh>;
+            print h2("contents of $s{error_file}:");
+            print "<table border=0>";
+            foreach (@c) {
+                my $line = $_;
+                   $line =~ /(.*?)\:\:(.*?)\:(.*)/;
+                   
+                my $timestamp = $1;
+                my $error     = $2;
+                my $unique    = $3;
+                print "<tr><td>$timestamp</td><td>$error</td><td>$unique</td></tr>";
+            }
+            print "</table>";
+        }
+        
+        print h2("rescanning options will come at some point");
+        
+        # end of admin page
     }
     
+    # end of param/no param
 }
 
 my $time_finish = Time::HiRes::gettimeofday();
@@ -297,7 +331,7 @@ sub get_table_for_printing {
         my %lh = %{$hash{$uid}} if $type ne 'stats'; # hacky..
 
         # if we have an image, use that instead of the show title 
-        if ($lh{cover} ne 'unknown' and $lh{cover} ne 'not_set' and -f $lh{cover}) {
+        if (defined $lh{cover} and -f $lh{cover}) {
             my $link = basename($lh{cover});
                $link = $s{image_dir_uri} . $link;
             $lh{image_uri} = "<img src='$link'>";
