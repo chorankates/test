@@ -302,7 +302,12 @@ sub get_sql {
 			%h = cleanup_sql(\%h, 'out'); 
 		} else {
 			# tv and movie are defined as HoH (even if only one match)
-			$h{$_} = cleanup_sql($h{$_}, 'out') foreach (keys %h); 
+		    foreach my $entry (keys %h) { 
+				# this is so hacktastic.. is there a wantarray equivalent for hashes?
+				my %lh = cleanup_sql($h{$entry}, "out");
+				$h{$entry} = \%lh;
+		    }
+
 		}
 	}
 	
