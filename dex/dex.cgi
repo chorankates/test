@@ -124,22 +124,41 @@ unless (param()) {
    
     dump_hash(\%p, "params"); # not a debug command in this context
     
-    print h2("arrested development (multiple):");
-    print get_table_for_printing($s{db}, 'tv', 'multiple', 'WHERE show LIKE \'%Arrested%\'');
+    if (0) {
+        # just some samples
+        print h2("arrested development (multiple):");
+        print get_table_for_printing($s{db}, 'tv', 'multiple', 'WHERE show LIKE \'%Arrested%\'');
+        
+        print h2("the i.t. crowd - calamity jane (single):");
+        print get_table_for_printing($s{db},'tv', 'single', 'WHERE uid == \'4b8ba2eeccc49252a01776eadbb15422\'');
+        
+        print h2("indiana jones (multiple):");
+        print get_table_for_printing($s{db}, 'movies', 'multiple', 'WHERE title LIKE \'%Indiana Jones%\'');
+        
+        print h2("the usual suspects (single):");
+        print get_table_for_printing($s{db}, 'movies', 'single', 'WHERE uid == \'16153ca725d14826ed3857cf08996121\'');
+    }
     
-    print h2("the i.t. crowd - calamity jane (single):");
-    print get_table_for_printing($s{db},'tv', 'single', 'WHERE uid == \'4b8ba2eeccc49252a01776eadbb15422\'');
+    # build a SQL query
+    my @query;
+    foreach my $param (keys %p) {
+        next if $param eq 'function';
+        next if $param eq 'media';
+        next if $param =~ /use_/; # i know, but watch
+        push @query, "$param LIKE '%$p{$param}%'" if $p{'use_'. $param};
+    }
     
-    print h2("indiana jones (multiple):");
-    print get_table_for_printing($s{db}, 'movies', 'multiple', 'WHERE title LIKE \'%Indiana Jones%\'');
+    my $query = 'WHERE ' . join(" and ", @query);
     
-    print h2("the usual suspects (single):");
-    print get_table_for_printing($s{db}, 'movies', 'single', 'WHERE uid == \'16153ca725d14826ed3857cf08996121\'');
+    print h2("query: $query");
     
     # sub traffic cop
-    #if ($p{function} =~ /query/i) {
+    if ($p{function} =~ /query/i) {
+        my $mode = ($p{uid} and $p{use_uid}) ? 'single' : 'multiple'; # if match_count returned from the get_sql() call == 1, we'll adapt << maybe
+        my $media = $p{media};
         
-    #}
+        print get_table_for_printing($s{db}, $media, $mode, $query);
+    }
     
 }
 
@@ -261,6 +280,8 @@ sub get_table_for_printing {
         ($href, $count) = get_sql($database, 'stats');
     }
     
+    $mode = ($count == 1) ? 'single' : 'multiple'; # this will override the calling context.. hope thats all right
+    
     unless (ref $href) { 
         print Dumper(\$href);
         die "DIE:: no results from get_sql() call, check for DB errors";
@@ -364,7 +385,7 @@ sub get_table_for_printing {
             
             my $released_link   = make_query_link($lh{released}, 'released', 'movies');
             my $imdb_link       = "<a href='$lh{imdb}' target='_new'>$lh{imdb}</a>";
-            my $self_link       = make_query_link($lh{uid}, 'uid', 'movies', 'moar');                
+            my $self_link       = make_query_link($uid, 'uid', 'movies', 'moar');                
             
             if ($mode eq 'multiple') {
                 # movies: uid TEXT PRIMARY KEY, title TEXT, director TEXT, actors TEXT, genres TEXT, notes TEXT, imdb TEXT, cover TEXT, added TEXT, released TEXT, ffp TEXT
