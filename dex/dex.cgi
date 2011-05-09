@@ -75,9 +75,6 @@ $s{image_dir_uri} = $s{host} . $s{host_dir} . "media_images/";
 $s{image_dir}     = $s{db_folder} . "media_images/";
 $s{db}            = $s{db_folder} . "dex.sqlite";
 
-my $foo = make_query_link({show => 'White Collar', Season => '2'}, 'inconsequential', 'tv', 'link text');
-my $bar = make_query_link('White Collar', 'show', 'tv', 'other link text');
-
 ## global headers
 html_start();
 print get_stats_div();
@@ -645,7 +642,10 @@ sub get_select {
 # my $title = make_query_link($lh{title}, 'title');
 
 sub make_query_link {
-    # make_query_link($string, $type, $text) - returns a link query for a single string/type pair
+    # make_query_link($string, $type, $text) - returns a link query for a single string/type pair -- also supports calling with $string = hash, see examples:
+    # my $foo = make_query_link({show => 'White Collar', Season => '2'}, 'inconsequential', 'tv', 'link text');
+    # my $bar = make_query_link('White Collar', 'show', 'tv', 'other link text');
+
     my $string = shift;
     my $type   = shift;
     my $media  = shift;
