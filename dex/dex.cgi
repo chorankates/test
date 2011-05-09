@@ -15,6 +15,7 @@ use 5.010;
 
 use CGI ':standard';
 use CGI::Carp 'fatalsToBrowser'; # dbgz
+use Data::Dumper;
 use DBD::SQLite;
 use Time::HiRes;
 
@@ -252,6 +253,11 @@ sub get_table_for_printing {
         ($href, $count) = get_sql($database, 'stats');
     }
     
+    unless (ref $href) { 
+        print Dumper(\$href);
+        die "DIE:: no results from get_sql() call, check for DB errors";
+    }
+
     %hash = %{$href};
     my $processed_count = 0;
     my @table = ("<table border=0 width='80%'>"); 
