@@ -2,7 +2,7 @@
 ## dex-crawl.pl -- script to gather information about TV shows and Movies on an external device (NAS for now)
 
 # TODO
-## write function to query IMDB and return the information needed
+## write function to query wikipedia and return the information needed
 
 use strict;
 use warnings;
