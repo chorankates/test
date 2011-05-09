@@ -4,7 +4,6 @@
 # todo
 # need to hook up search buttons (really just start writing the functions other than the landing page)
 #  details page -- individual
-# todo: make make_query_link() support chains/multiple string/type pairs
 # need to convert the single mode in get_table_for_printing() to be able to handle inline editing
 # admin page
     # add a way to view errors
@@ -30,6 +29,7 @@ use lib '/home/conor/git/test/dex/lib';
 use dex::util;
 
 my $time_start = Time::HiRes::gettimeofday();
+
 
 ## define some defaults
 my (%d, %p, %s); # database, incoming parameters, settings
@@ -74,6 +74,9 @@ $s{cgi_address}   = $s{host} . $s{cgi_dir} . basename($0);
 $s{image_dir_uri} = $s{host} . $s{host_dir} . "media_images/";
 $s{image_dir}     = $s{db_folder} . "media_images/";
 $s{db}            = $s{db_folder} . "dex.sqlite";
+
+my $foo = make_query_link({show => 'White Collar', Season => '2'}, 'inconsequential', 'tv', 'link text');
+my $bar = make_query_link('White Collar', 'show', 'tv', 'other link text');
 
 ## global headers
 html_start();
@@ -643,13 +646,31 @@ sub get_select {
 
 sub make_query_link {
     # make_query_link($string, $type, $text) - returns a link query for a single string/type pair
-    my ($string, $type, $media, $text) = @_;
+    my $string = shift;
+    my $type   = shift;
+    my $media  = shift;
+    my $text  =  shift;
+
+    my ($multiple, @multiple);
+    if (ref $string) {
+        my %lh = %{$string};
+        foreach my $key (keys %lh) {
+            push @multiple, "$key=$lh{$key}";
+            push @multiple, "use_" . $key . "=1";
+        }
+        $multiple = join("&", @multiple);
+        $multiple = '&' . $multiple;
+    }
     $text = $string unless defined $text; # makes $text an optional parameter
     my $uri = $s{cgi_address} . "?function=query&media=$media";
     
-    $uri .= "&$type=$string";
-    $uri .= "&use_" . $type . "=1";
-    
+    if ($multiple) {
+        $uri .= $multiple;
+    } else {
+        $uri .= "&$type=$string";
+        $uri .= "&use_" . $type . "=1";
+    }
+
     my $pre = "<a href='";
     my $post = "'>$text</a>";
     
