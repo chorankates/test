@@ -2,16 +2,14 @@
 ## dex.cgi -- web interface for dex (influenced by dico)
 
 # todo
-# need to hook up search buttons (really just start writing the functions other than the landing page)
-#  details page -- individual
 # need to convert the single mode in get_table_for_printing() to be able to handle inline editing
 # admin page
-    # add a way to view errors
+    #x add a way to view errors
     # need to add controls to force a new scan
-# add results count to the query results page (if in multiple mode)
 # need to do some processing on links to prevent accidental (or intentional) sql injection from episodes with quotation marks in them -- also, they need to be carets to match database entries
 # add a 'find 10 random' UIDs (probably have to do tv and movies separately unless we do database join and generalize the get_sql() function based on number of $#matches .. do this)
 # add a 'summary' page that pulls unique attributes from both databases (total count, tv episodes, top directors / actors, etc)
+# need to add an input field that allows ~direct SQL calls to the db
 
 use strict;
 use warnings;
@@ -474,6 +472,7 @@ sub get_table_for_printing {
     }
     
     push @table, "</table>";
+    push @table, "<h2>found $count results</h2>" unless $type =~ /stats/;
     $html .= join("\n", @table);
     
     return $html;
