@@ -9,7 +9,7 @@
 # need to do some processing on links to prevent accidental (or intentional) sql injection from episodes with quotation marks in them -- also, they need to be carets to match database entries
 # add a 'find 10 random' UIDs (probably have to do tv and movies separately unless we do database join and generalize the get_sql() function based on number of $#matches .. do this)
 # add a 'summary' page that pulls unique attributes from both databases (total count, tv episodes, top directors / actors, etc)
-# need to add an input field that allows ~direct SQL calls to the db
+# need to determine how feasible it is to allow ORDER BY queries to be used in $addl_sql, since we're adding results to a hash.. would have to give each entry an incremental number coming out of the db, then sort based on that when displaying the results
 
 use strict;
 use warnings;
@@ -156,7 +156,14 @@ unless (param()) {
             push @query, "$param LIKE '%$p{$param}%'" if $p{'use_'. $param};
         }
         
-        my $query = 'WHERE ' . join(" and ", @query);
+        my $query;
+        if ($p{sql} and $p{use_sql}) {
+            # override the default query with user input .. unsafe
+            $query = $p{sql};
+        } else {
+            $query = 'WHERE ' . join(" and ", @query); # . ' ORDER BY DESC'; # appending an order is a good idea, but how can we generalize it?
+        }
+        
         print h2("query: $query");
         
         my $mode = ($p{uid} and $p{use_uid}) ? 'single' : 'multiple'; # if match_count returned from the get_sql() call == 1, we'll adapt << maybe
@@ -561,6 +568,7 @@ sub get_query_control {
         "<tr><td>notes</td><td><input name='notes'></td><td><input type='checkbox' name='use_notes'></td></tr>\n",
         "<tr><td>released year</td><td>", get_select('released'), "</td><td><input type='checkbox' name='use_released'></td></tr>\n",
         "<tr><td>ffp</td><td><input name='ffp'></td><td><input type='checkbox' name='use_ffp'></td></tr>\n",
+        "<tr><td>sql</td><td><textarea name='sql'></textarea></td><td><input type='checkbox' name='use_sql'></td></tr>\n",
         "<tr><td>&nbsp;</td><td>&nbsp;</td><td><input type='submit'></td></tr>",
         "</table>\n",
         "</form>\n",
@@ -579,6 +587,7 @@ sub get_query_control {
         "<tr><td>actors</td><td><input name='actors'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
         "<tr><td>released year</td><td>", get_select('released'), "</td><td><input type='checkbox' name='use_released'></td></tr>\n",
         "<tr><td>ffp</td><td><input name='ffp'></td><td><input type='checkbox' name='use_ffp'></td></tr>\n",
+        "<tr><td>sql</td><td><textarea name='sql'></textarea></td><td><input type='checkbox' name='use_sql'></td></tr>\n",
         "<tr><td>&nbsp;</td><td>&nbsp;</td><td><input type='submit'></td></tr>",
         "</table>\n",
         "</form>\n",
