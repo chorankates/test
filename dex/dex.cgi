@@ -11,6 +11,7 @@
 # add results count to the query results page (if in multiple mode)
 # need to do some processing on links to prevent accidental (or intentional) sql injection from episodes with quotation marks in them -- also, they need to be carets to match database entries
 # add a 'find 10 random' UIDs (probably have to do tv and movies separately unless we do database join and generalize the get_sql() function based on number of $#matches .. do this)
+# add a 'summary' page that pulls unique attributes from both databases (total count, tv episodes, top directors / actors, etc)
 
 use strict;
 use warnings;
@@ -562,11 +563,13 @@ sub get_query_control {
         "<tr><td>released year</td><td>", get_select('released'), "</td><td><input type='checkbox' name='use_released'></td></tr>\n",
         "<tr><td>ffp</td><td><input name='ffp'></td><td><input type='checkbox' name='use_ffp'></td></tr>\n",
         "<tr><td>&nbsp;</td><td>&nbsp;</td><td><input type='submit'></td></tr>",
-        "</table>",
+        "</table>\n",
+        "</form>\n",
         
         "<strong>movies</strong>\n",
         "<table border='1' width='50%'>\n",
         "<tr><td><strong>attribute</strong></td><td><strong>value</strong></td><td><strong>use</strong></td></tr>\n",
+        "<form action=/cgi-bin/dex.cgi>",
         "<input type='hidden' name='type' value='movies'>\n",
         "<tr><td>movie title</td><td><input name='title'></td><td><input type='checkbox' name='use_title'></td></tr>\n",
         "<tr><td>director</td><td><input name='director'></td><td><input type='checkbox' name='use_director'></td></tr>\n",
@@ -578,7 +581,6 @@ sub get_query_control {
         "<tr><td>ffp</td><td><input name='ffp'></td><td><input type='checkbox' name='use_ffp'></td></tr>\n",
         "<tr><td>&nbsp;</td><td>&nbsp;</td><td><input type='submit'></td></tr>",
         "</table>\n",
-        
         "</form>\n",
         
         #"<tr><td>date</td><td><input name='date' onchange='document.forms[0].use_date.checked = true'></td><td><input type='checkbox' name='use_date'></td></tr>",
