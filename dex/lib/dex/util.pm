@@ -88,7 +88,7 @@ sub get_info_from_filename {
 		my $count = (@t) ? $#t + 1 : 0; # lol @ typecasting
 		
 		unless ($#t) {
-			$h{error} = "unknown file format: $ffp";
+			$h{error} = "unknown filename format: $ffp";
 			log_error($h{error});
 			return %h;
 		}
