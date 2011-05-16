@@ -8,7 +8,9 @@
 # admin page
     # add a way to view errors
     # need to add controls to force a new scan
-
+# add results count to the query results page (if in multiple mode)
+# need to do some processing on links to prevent accidental (or intentional) sql injection from episodes with quotation marks in them -- also, they need to be carets to match database entries
+# add a 'find 10 random' UIDs (probably have to do tv and movies separately unless we do database join and generalize the get_sql() function based on number of $#matches .. do this)
 
 use strict;
 use warnings;
