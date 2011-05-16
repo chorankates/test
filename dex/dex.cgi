@@ -360,7 +360,7 @@ sub get_table_for_printing {
             my $episode_link    = make_query_link($lh{episode}, 'epsiode', 'tv'); # this is kind of useless either way, but we can't not turn into a link
             my $title_link      = make_query_link($lh{title}, 'title', 'tv', $lh{title}); # this is mostly useless, but could find some cool intersections
             my $released_link   = make_query_link($lh{released}, 'released', 'tv');
-            my $self_link       = make_query_link($uid, 'uid', 'moar', 'tv');
+            my $self_link       = make_query_link($uid, 'uid', 'tv', 'moar');
             my $wiki_link       = "<a href='$lh{wikipedia}'>$lh{wikipedia}</a>";
 
             if ($mode eq 'multiple') {
