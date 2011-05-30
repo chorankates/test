@@ -10,7 +10,7 @@ use URI::Escape;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw(log_error create_db nicetime cleanup_sql cleanup_uri cleanup_filename);
+our @EXPORT_OK = qw(log_error create_db nicetime cleanup_sql cleanup_uri cleanup_filename escape_uri);
 our @EXPORT = qw(get_info_from_filename get_md5 get_sql put_sql database_maintenance download_file get_imdb get_wikipedia);
 
 # todo
@@ -907,6 +907,22 @@ sub nicetime {
     if ($type eq "both") { return $full; }
 }
 
+
+sub escape_uri {
+	# uri_escape($string, [reverse]) - returns a URI escaped version of $string, if [reverse] is specified, we unescape it
+	my $string    = shift;
+	my $direction = shift // 0;
+	
+	my $results;
+	
+	if ($direction) {
+		$results = URI::Escape::uri_unescape($string);
+	} else {
+		$results = URI::Escape::uri_escape($string);
+	}
+ 	
+	return $results;
+}
 
 1;
 
