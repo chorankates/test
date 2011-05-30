@@ -528,6 +528,11 @@ sub get_query_div {
             string => 'Sean Connery',
             type   => 'actors',
             media  => 'movies',
+        },
+        e => {
+            string => 'James Bond',
+            type   => 'title',
+            media  => 'movies',
         }
     );
     
