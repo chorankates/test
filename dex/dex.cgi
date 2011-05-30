@@ -7,10 +7,8 @@
     #x add a way to view errors
     # need to add controls to force a new scan
 # need to do some processing on links to prevent accidental (or intentional) sql injection from episodes with quotation marks in them -- also, they need to be carets to match database entries
-# add a 'find 10 random' UIDs (probably have to do tv and movies separately unless we do database join and generalize the get_sql() function based on number of $#matches .. do this)
-# add a 'summary' page that pulls unique attributes from both databases (total count, tv episodes, top directors / actors, etc)
+# add a 'summary' page that pulls unique attributes from both databases (total count, tv episodes, top directors / actors, etc) -- this probably should also be stored in a table and could be updated by db_maintenance()
 # need to determine how feasible it is to allow ORDER BY queries to be used in $addl_sql, since we're adding results to a hash.. would have to give each entry an incremental number coming out of the db, then sort based on that when displaying the results
-# need to do a mass update of the 'cover' fiel.. replace /home/git/test/dex/media_images/ with /home/dex/media_images/
 
 use strict;
 use warnings;
@@ -548,6 +546,14 @@ sub get_query_div {
         $html .= "<tr><td>" . make_query_link($q{$query}{string}, $q{$query}{type}, $q{$query}{media}) . "</tr></td>";
     }
     
+    # had to go the 'hardcoded' route because the link namescoming back from make_query_link() uses the first parameters as the name.. printing URI escaped HTML is ugly
+    #my $rand_tv = make_query_link('ORDER+BY+RANDOM%28%29%0D%0ALIMIT+10', 'sql', 'tv');
+    #my $rand_movies = make_query_link('ORDER+BY+RANDOM%28%29%0D%0ALIMIT+10', 'sql', 'movies');
+    my $rand_tv = "<a href=" .$s{cgi_address} . '?function=query&media=tv&sql=ORDER+BY+RANDOM%28%29%0D%0ALIMIT+10&use_sql=1' . ">10 rand tv</a>";
+    my $rand_movies = "<a href=" . $s{cgi_address} . '?function=query&media=movies&sql=ORDER+BY+RANDOM%28%29%0D%0ALIMIT+10&use_sql=1' . ">10 rand movies</a>";
+    
+    $html .= "<tr><td>$rand_tv</td></tr><tr><td>$rand_movies</td></tr>";
+    
     $html .= "</table>";
     
     return $html;
@@ -663,9 +669,7 @@ sub get_select {
     
     return $html;
 }
-
-# my $title = make_query_link($lh{title}, 'title');
-
+    
 sub make_query_link {
     # make_query_link($string, $type, $text) - returns a link query for a single string/type pair -- also supports calling with $string = hash, see examples:
     # my $foo = make_query_link({show => 'White Collar', Season => '2'}, 'inconsequential', 'tv', 'link text');
