@@ -10,7 +10,6 @@
 # add a 'find 10 random' UIDs (probably have to do tv and movies separately unless we do database join and generalize the get_sql() function based on number of $#matches .. do this)
 # add a 'summary' page that pulls unique attributes from both databases (total count, tv episodes, top directors / actors, etc)
 # need to determine how feasible it is to allow ORDER BY queries to be used in $addl_sql, since we're adding results to a hash.. would have to give each entry an incremental number coming out of the db, then sort based on that when displaying the results
-# add some javascript such that when i type in a field, the use_<field> box is checked
 # need to do a mass update of the 'cover' fiel.. replace /home/git/test/dex/media_images/ with /home/dex/media_images/
 
 use strict;
@@ -118,7 +117,10 @@ unless (param()) {
     print h2("sample sql: " . $recent_sql);
     
     # get the last ten tv entries
-    print get_table_for_printing($s{db}, 'tv', 'multiple', $recent_sql);
+    #print get_table_for_printing($s{db}, 'tv', 'multiple', $recent_sql);
+    
+    # get the last 5 movie entries (since they look prettier -- usually)
+    print get_table_for_printing($s{db},  'movies', 'multiple', $recent_sql);
     
     print get_query_control();
     # end up for parameter page
@@ -567,16 +569,16 @@ sub get_query_control {
         "<table border='1' width='50%'>\n",
         "<tr><td><strong>attribute</strong></td><td><strong>value</strong></td><td><strong>use</strong></td></tr>\n",
         "<input type='hidden' name='media' value='tv'>\n",
-        "<tr><td>show title</td><td><input name='show'></td><td><input type='checkbox' name='use_show'></td></tr>\n",
+        "<tr><td>show title</td><td><input name='show' onchange='use_show.checked=true'></td><td><input type='checkbox' name='use_show'></td></tr>\n",
         "<tr><td>season #</td><td>", get_select('season'), "</td><td><input type='checkbox' name='use_season'></td></tr>\n",
         "<tr><td>episode #</td><td>", get_select('episode'), "</td><td><input type='checkbox' name='use_episode'></td></tr>\n",
-        "<tr><td>episode title</td><td><input name='title'></td><td><input type='checkbox' name='use_title'></td></tr>\n",
-        "<tr><td>actors</td><td><input name='actors'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
+        "<tr><td>episode title</td><td><input name='title' onchange='use_title.checked=true'></td><td><input type='checkbox' name='use_title'></td></tr>\n",
+        "<tr><td>actors</td><td><input name='actors' onchange='use_actors.checked=true'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
         "<tr><td>genres</td><td>", get_select('genres'), "</td><td><input type='checkbox' name='use_genres'></td></tr>\n",
-        "<tr><td>notes</td><td><input name='notes'></td><td><input type='checkbox' name='use_notes'></td></tr>\n",
+        "<tr><td>notes</td><td><input name='notes' onchange='use_notes.checked=true'></td><td><input type='checkbox' name='use_notes'></td></tr>\n",
         "<tr><td>released year</td><td>", get_select('released'), "</td><td><input type='checkbox' name='use_released'></td></tr>\n",
-        "<tr><td>ffp</td><td><input name='ffp'></td><td><input type='checkbox' name='use_ffp'></td></tr>\n",
-        "<tr><td>sql</td><td><textarea name='sql'></textarea></td><td><input type='checkbox' name='use_sql'></td></tr>\n",
+        "<tr><td>ffp</td><td><input name='ffp' onchange='use_ffp.checked=true'></td><td><input type='checkbox' name='use_ffp'></td></tr>\n",
+        "<tr><td>sql</td><td><textarea name='sql' onchange='use_sql.checked=true'></textarea></td><td><input type='checkbox' name='use_sql'></td></tr>\n",
         "<tr><td>&nbsp;</td><td>&nbsp;</td><td><input type='submit'></td></tr>",
         "</table>\n",
         "</form>\n",
@@ -587,15 +589,15 @@ sub get_query_control {
         "<form action=/cgi-bin/dex.cgi>",
         "<input type='hidden' name='function' value ='query'>\n",
         "<input type='hidden' name='media' value='movies'>\n",
-        "<tr><td>movie title</td><td><input name='title'></td><td><input type='checkbox' name='use_title'></td></tr>\n",
-        "<tr><td>director</td><td><input name='director'></td><td><input type='checkbox' name='use_director'></td></tr>\n",
-        "<tr><td>actors</td><td><input name='actors'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
+        "<tr><td>movie title</td><td><input name='title' onchange='use_title.checked=true'></td><td><input type='checkbox' name='use_title'></td></tr>\n",
+        "<tr><td>director</td><td><input name='director' onchange='use_director.checked=true'></td><td><input type='checkbox' name='use_director'></td></tr>\n",
+        "<tr><td>actors</td><td><input name='actors' onchange='use_actors.checked=true'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
         "<tr><td>genres</td><td>", get_select('genres'), "</td><td><input type='checkbox' name='use_genres'></td></tr>\n",
-        "<tr><td>actors</td><td><input name='notes'></td><td><input type='checkbox' name='use_notes'></td></tr>\n",
-        "<tr><td>actors</td><td><input name='actors'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
+        "<tr><td>actors</td><td><input name='notes' onchange='use_notes.checked=true'></td><td><input type='checkbox' name='use_notes'></td></tr>\n",
+        "<tr><td>actors</td><td><input name='actors' onchange='use_actors.checked=true'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
         "<tr><td>released year</td><td>", get_select('released'), "</td><td><input type='checkbox' name='use_released'></td></tr>\n",
-        "<tr><td>ffp</td><td><input name='ffp'></td><td><input type='checkbox' name='use_ffp'></td></tr>\n",
-        "<tr><td>sql</td><td><textarea name='sql'></textarea></td><td><input type='checkbox' name='use_sql'></td></tr>\n",
+        "<tr><td>ffp</td><td><input name='ffp' onchange='use_ffp.checked=true'></td><td><input type='checkbox' name='use_ffp'></td></tr>\n",
+        "<tr><td>sql</td><td><textarea name='sql' onchange='use_.sqlchecked=true'></textarea></td><td><input type='checkbox' name='use_sql'></td></tr>\n",
         "<tr><td>&nbsp;</td><td>&nbsp;</td><td><input type='submit'></td></tr>",
         "</table>\n",
         "</form>\n",
@@ -615,21 +617,23 @@ sub get_select {
     my $html;
     
     if ($name  =~ /episode|season/) {
-        my @ints = (1..30); 
+        my @ints = (' ', 1..30); 
         
-        foreach (@ints) {
-            $_ = 0 . $_ if ($_ < 10);
-        }
+        # can't do this as sql doesn't store leading 0 and i don't want to mess up my oneliner on 631
+        #foreach (@ints) {
+        #    $_ = 0 . $_ if ($_ =~ /\d/ and $_ < 10);
+        #}
         
         @ints = @ints[0..20] if $name =~ /season/; # well thats an annoying perlism.. generate 1..30, have to reference 0..n
         
-        $html = "<select name='$name'>";
+        $html = "<select name='$name' onchange='use_$name.checked=true'>";
         
         $html .= "<option value='$_'>$_</option>" foreach (@ints);
         
         $html .= "</select>";
     } elsif ($name =~ /genres/) {
         my @genres = (
+            ' ',
             'action',
             'animated',
             'comedy',
@@ -647,7 +651,7 @@ sub get_select {
         
     } elsif ($name =~ /released/) {
         my $cur_year = 1900 + (localtime)[5];
-        my @years = (1980..$cur_year);
+        my @years = (' ', 1980..$cur_year);
         
         $html = "<select name='$name'>";
         $html .= "<option value='$_'>$_</option>" foreach (@years);
