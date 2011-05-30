@@ -10,6 +10,8 @@
 # add a 'find 10 random' UIDs (probably have to do tv and movies separately unless we do database join and generalize the get_sql() function based on number of $#matches .. do this)
 # add a 'summary' page that pulls unique attributes from both databases (total count, tv episodes, top directors / actors, etc)
 # need to determine how feasible it is to allow ORDER BY queries to be used in $addl_sql, since we're adding results to a hash.. would have to give each entry an incremental number coming out of the db, then sort based on that when displaying the results
+# add some javascript such that when i type in a field, the use_<field> box is checked
+# need to do a mass update of the 'cover' fiel.. replace /home/git/test/dex/media_images/ with /home/dex/media_images/
 
 use strict;
 use warnings;
@@ -341,6 +343,7 @@ sub get_table_for_printing {
         # if we have an image, use that instead of the show title 
         if (defined $lh{cover} and -f $lh{cover}) {
             my $link = basename($lh{cover});
+               $link = dex::util::escape_uri($link); # money
                $link = $s{image_dir_uri} . $link;
             $lh{image_uri} = "<img src='$link'>";
         } else {
@@ -473,7 +476,7 @@ sub get_table_for_printing {
         
         # more for HTML rendering/processing than db strain
         if ($processed_count > $s{results_limit}) {
-            err("returning early with '$s{results_limit}' results (out of $count total)");
+            err("returning early with '$s{results_limit}' results (out of $count total)"); # there is a bug here, this is not hitting
             last;
         }
     }
@@ -507,12 +510,12 @@ sub get_query_div {
     
     my %q = (
         a => {
-            string => 'Harrison Ford',
+            string => 'John Cusack',
             type   => 'actors',
             media  => 'movies',
         },
         b => {
-            string => 'Star Wars',
+            string => 'Harry Potter',
             type   => 'title',
             media  => 'movies',
         },
