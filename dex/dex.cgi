@@ -9,6 +9,7 @@
 # need to do some processing on links to prevent accidental (or intentional) sql injection from episodes with quotation marks in them -- also, they need to be carets to match database entries
 # add a 'summary' page that pulls unique attributes from both databases (total count, tv episodes, top directors / actors, etc) -- this probably should also be stored in a table and could be updated by db_maintenance()
 # need to determine how feasible it is to allow ORDER BY queries to be used in $addl_sql, since we're adding results to a hash.. would have to give each entry an incremental number coming out of the db, then sort based on that when displaying the results
+# stuff the search forms on the home page into collapsible divs.. did this for another project, but can't remember which one
 
 use strict;
 use warnings;
@@ -89,12 +90,14 @@ unless (param()) {
     my $admin_link = $s{cgi_address} . '?function=admin';
     my @db_file    = stat $s{db};
     my $db_size    = nicesize($db_file[7]);
+    my $movies_unknown_link = $s{cgi_address} . '?function=query&media=movies&notes=unknown&use_notes=on';
     
     my @information = (
         "dex is a media indexing/research system combining Perl, SQLite and a little HTML/CSS",
         "currently all queries parameters are boolean ANDs",
         "database <a href=$db_link>here</a> ($db_size)",
         "administration <a href=$admin_link>here</a>",
+        "movies that need more info: <a href=$movies_unknown_link>here</a>",
         #"test-* functions may ignore specifications in 'new poke' table, <a href=$s_link>RTFS</a>",
 	"/etc/crontab: $cron",
     );
@@ -599,8 +602,7 @@ sub get_query_control {
         "<tr><td>director</td><td><input name='director' onchange='use_director.checked=true'></td><td><input type='checkbox' name='use_director'></td></tr>\n",
         "<tr><td>actors</td><td><input name='actors' onchange='use_actors.checked=true'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
         "<tr><td>genres</td><td>", get_select('genres'), "</td><td><input type='checkbox' name='use_genres'></td></tr>\n",
-        "<tr><td>actors</td><td><input name='notes' onchange='use_notes.checked=true'></td><td><input type='checkbox' name='use_notes'></td></tr>\n",
-        "<tr><td>actors</td><td><input name='actors' onchange='use_actors.checked=true'></td><td><input type='checkbox' name='use_actors'></td></tr>\n",
+        "<tr><td>notes</td><td><input name='notes' onchange='use_notes.checked=true'></td><td><input type='checkbox' name='use_notes'></td></tr>\n",
         "<tr><td>released year</td><td>", get_select('released'), "</td><td><input type='checkbox' name='use_released'></td></tr>\n",
         "<tr><td>ffp</td><td><input name='ffp' onchange='use_ffp.checked=true'></td><td><input type='checkbox' name='use_ffp'></td></tr>\n",
         "<tr><td>sql</td><td><textarea name='sql' onchange='use_.sqlchecked=true'></textarea></td><td><input type='checkbox' name='use_sql'></td></tr>\n",
