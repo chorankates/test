@@ -24,6 +24,8 @@ my %s = (
     download_torrent => 1, # 1 downloads files from known ul-ers, 2 downloads from anyone
 	allow_yesterday  => 1, # matches 'Today' or 'Y-day'
 
+	browser_agent => "Mozilla/5.0 (Windows; U; Windows NT 5.2; en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6",
+
 );
 
 my %torrents;
@@ -38,7 +40,7 @@ for my $url (@{$s{base_url}}) {
 
 	my ($worker, $response);
 	$worker = LWP::UserAgent->new();
-    $worker->agent("Mozilla/5.0 (Windows; U; Windows NT 5.2; en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6"); # liar
+    $worker->agent($s{browser_agent}); # liar
 
 	$response = $worker->get($url);
 	
@@ -70,6 +72,8 @@ for my $t (keys %torrents) {
 	my $time     = $torrents{$t}{ul_time};
 	my $size     = $torrents{$t}{size};
 
+	my $fname    = basename($url);
+
 	last if $s{download_torrent} == 0;
 
 	print "  processing torrent link [$url]..\n" if $s{verbose} ge 2;
@@ -87,7 +91,7 @@ for my $t (keys %torrents) {
 
 	print "  downloading torrent [$url]..\n" if $s{verbose} ge 1;
 
-	
+	my $dl_results = get_file($url, $fname);
 
 	print "\tdone\n" if $s{verbose} ge 2;
 }
@@ -97,4 +101,20 @@ my $finish = localtime;
 print "$0 finished at " . localtime . ", took " . $finish - $start . "\n";
 
 exit;
+
+
+sub get_file {
+	# get_file($url, $fname) - returns 0|1 for success|failure
+	my ($url, $file) = @_;
+    my $results = 1;
+
+	my $worker = LWP::UserAgent->new();
+	   $worker->agent($s{browser_agent});
+
+	my $response = $worker->get($url, ':content_file' => $file);
+
+    ## could probably key off $worker->is_success instead
+
+	$results = (-f $file) ? 0 : 1;
+}
 
