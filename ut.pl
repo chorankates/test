@@ -47,14 +47,19 @@ for my $url (@{$s{base_url}}) {
 	my @content = split("<tr>", $response->content);
 
 	for my $line (@content) { 
-    	print "DBGZ" if 0;
+
 		if ($line =~ /href=(.*)\stitle="Download this torrent">/) { 
             $torrents{$i}{url} = $1;
 			
 			$torrents{$i}{ul_by}   = $1 if $line =~ /ULed\sby\s.*?>(.*?)</;
 			$torrents{$i}{ul_time} = $1 if $line =~ /Uploaded\s(.*?), Size\s(.*?),/;
 			$torrents{$i}{size}    = $2 if defined $2;
+			$torrents{$i}{src}     = $url;
 
+			#ocd
+			$torrents{$i}{ul_time} =~ s/&nbsp;/ /;
+			$torrents{$i}{size}    =~ s/&nbsp;/ /;
+			
 			$i++;
 		}
 	}
@@ -98,6 +103,9 @@ for my $t (keys %torrents) {
 
 	my $dl_results = get_file($url, $fname);
        $dl_results = ($dl_results) ? 'success' : 'failure';
+	
+	$torrents{$t}{downloaded} = $dl_results;
+
 	print "\tdone: $dl_results\n" if $s{verbose} ge 2;
 }
 
@@ -105,13 +113,16 @@ if ($s{verbose} ge 2) {
 	print "\%torrents:\n";
 
 	for my $key (sort keys %torrents) { 
+		next unless exists $torrents{$key}{downloaded} or $s{verbose} ge 2;
+
 		# keys are numeric, so keeping this order will list most popular -> least popular
     	print(
 			"\t$key\n",
-			"\turl:   $torrents{$key}{url}\n",
-			"\tul_by: $torrents{$key}{ul_by}\n",
-			"\ttime:  $torrents{$key}{time}\n",
-			"\tsize:  $torrents{$key}{size}\n",
+			"\turl:    $torrents{$key}{url}\n",
+			"\tul_by:  $torrents{$key}{ul_by}\n",
+			"\ttime:   $torrents{$key}{time}\n",
+			"\tsize:   $torrents{$key}{size}\n",
+			#"\tsource: $torrents{$key}{source}\n",
 		);
 		
 	}
