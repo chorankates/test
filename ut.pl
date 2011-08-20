@@ -97,8 +97,24 @@ for my $t (keys %torrents) {
 	print "  downloading torrent [$url]..\n" if $s{verbose} ge 1;
 
 	my $dl_results = get_file($url, $fname);
+       $dl_results = ($dl_results) ? 'success' : 'failure';
+	print "\tdone: $dl_results\n" if $s{verbose} ge 2;
+}
 
-	print "\tdone\n" if $s{verbose} ge 2;
+if ($s{verbose} ge 2) { 
+	print "\%torrents:\n";
+
+	for my $key (sort keys %torrents) { 
+		# keys are numeric, so keeping this order will list most popular -> least popular
+    	print(
+			"\t$key\n",
+			"\turl:   $torrents{$key}{url}\n",
+			"\tul_by: $torrents{$key}{ul_by}\n",
+			"\ttime:  $torrents{$key}{time}\n",
+			"\tsize:  $torrents{$key}{size}\n",
+		);
+		
+	}
 }
 
 my $finish = localtime;
