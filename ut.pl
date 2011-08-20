@@ -25,6 +25,9 @@ my (%f, %s); # flags, settings
 		'VTV',
 	],
 
+	check_archive => 1, # will look in archive directory for $fname, and not download if -f
+	archive       => '/home/conor/dl/_torrent/src/',
+
     download_torrent => 1, # 1 downloads files from known ul-ers, 2 downloads from anyone
 	allow_yesterday  => 0, # matches 'Today' or 'Y-day'
 
@@ -112,8 +115,14 @@ for my $t (keys %torrents) {
 			print "  skipping download of torrent [$fname] because ul_by [$torrents{$t}{ul_by}] is not a known uploader\n" if $s{verbose} ge 2;
 			$torrents{$t}{downloaded} = 'skipped';
 			next;
+		}		
+
+		if (already_downloaded($fname)) { 
+			print "  skipping download of torrent [$fname] because it already exists in [$s{archive}]\n" if $s{verbose} ge 2;
+			next;
 		}
-		print "  download torrent [$url]..\n" if $s{verbose} ge 1;
+
+		print "  downloading torrent [$url]..\n" if $s{verbose} ge 1;
 	}
 
 
@@ -134,12 +143,13 @@ if ($s{verbose} ge 1) {
 		# keys are numeric, so keeping this order will list most popular -> least popular
     	print(
 			"\t$key\n",
-			#"\t\turl:    $torrents{$key}{url}\n",
-			"\t\tfname:  " . basename($torrents{$key}{url}) . "\n",
-			"\t\tul_by:  $torrents{$key}{ul_by}\n",
-			"\t\ttime:   $torrents{$key}{ul_time}\n",
-			"\t\tsize:   $torrents{$key}{size}\n",
-			#"\t\tsource: $torrents{$key}{source}\n",
+			#"\t\turl:        $torrents{$key}{url}\n",
+			"\t\tdownloaded: $torrents{$key}{downloaded}\n",
+			"\t\tfname:      " . basename($torrents{$key}{url}) . "\n",
+			"\t\tul_by:      $torrents{$key}{ul_by}\n",
+			"\t\ttime:       $torrents{$key}{ul_time}\n",
+			"\t\tsize:       $torrents{$key}{size}\n",
+			#"\t\tsource:     $torrents{$key}{source}\n",
 		);
 		
 	}
@@ -167,3 +177,11 @@ sub get_file {
 	$results = (-f $file) ? 0 : 1;
 }
 
+sub already_downloaded {
+	# already_downloaded($file) - returns 0|1 for no|yes
+	my $file = shift;
+
+	my $results = (-f File::Spec->catfile($s{archive}, $file)) ? 1 : 0;
+
+	return $results;
+}
