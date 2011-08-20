@@ -6,9 +6,12 @@ use warnings;
 
 use Cwd;
 use File::Basename;
+use Getopt::Long;
 use LWP::UserAgent;
 
-my %s = (
+my (%f, %s); # flags, settings
+
+%s = (
     home    => Cwd::getcwd,
     verbose => 1, # 0 <= n <= 2
 
@@ -28,6 +31,9 @@ my %s = (
 	browser_agent => "Mozilla/5.0 (Windows; U; Windows NT 5.2; en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6",
 
 );
+
+GetOptions(\%f, "verbose:i", "download_torrent:i", "allow_yesterday:i", "help");
+$s{$_} = $f{$_} foreach (keys %f);
 
 my %torrents;
 
