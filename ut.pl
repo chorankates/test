@@ -64,6 +64,7 @@ for my $url (@{$s{base_url}}) {
 			$torrents{$i}{src}     = $url;
 
 			#ocd
+			$torrents{$i}{url}     =~ s/"//g;
 			$torrents{$i}{ul_time} =~ s/&nbsp;/ /;
 			$torrents{$i}{size}    =~ s/&nbsp;/ /;
 			
@@ -88,8 +89,8 @@ for my $t (keys %torrents) {
 
 	last if $s{download_torrent} == 0;
 
-	print "  processing torrent link [$url]..\n" if $s{verbose} ge 1;
-	print "  ul_by: $uploader\n  ul_time: $time\n  size: $size\n" if $s{verbose} ge 2;
+	print "  processing torrent link [$fname]..\n" if $s{verbose} ge 1;
+	print "    ul_by: $uploader\t ul_time: $time\t size: $size\n" if $s{verbose} ge 2;
 
 	if ($s{allow_yesterday}) {
 		unless ($torrents{$t}{ul_time} =~ /Today|Y-day/i) {
@@ -106,12 +107,15 @@ for my $t (keys %torrents) {
 	}
 
 	unless ($s{download_torrent} == 2) { 
-		unless (@{$s{known_uploaders}} ~~ $torrents{$t}{ul_by}) { 
+		print "DBGZ" if 0;
+		unless (@{$s{known_uploaders}} ~~ /$torrents{$t}{ul_by}/) { 
 			print "  skipping download of torrent [$fname] because ul_by [$torrents{$t}{ul_by}] is not a known uploader\n" if $s{verbose} ge 2;
+			$torrents{$t}{downloaded} = 'skipped';
 			next;
 		}
 		print "  download torrent [$url]..\n" if $s{verbose} ge 1;
 	}
+
 
 	my $dl_results = get_file($url, $fname);
        $dl_results = ($dl_results) ? 'success' : 'failure';
@@ -125,16 +129,17 @@ if ($s{verbose} ge 1) {
 	print "\%torrents:\n";
 
 	for my $key (sort keys %torrents) { 
-		next unless exists $torrents{$key}{downloaded} or $s{verbose} ge 2;
+		next unless exists $torrents{$key}{downloaded} or $s{verbose} ge 3;
 
 		# keys are numeric, so keeping this order will list most popular -> least popular
     	print(
 			"\t$key\n",
-			"\turl:    $torrents{$key}{url}\n",
-			"\tul_by:  $torrents{$key}{ul_by}\n",
-			"\ttime:   $torrents{$key}{time}\n",
-			"\tsize:   $torrents{$key}{size}\n",
-			#"\tsource: $torrents{$key}{source}\n",
+			#"\t\turl:    $torrents{$key}{url}\n",
+			"\t\tfname:  " . basename($torrents{$key}{url}) . "\n",
+			"\t\tul_by:  $torrents{$key}{ul_by}\n",
+			"\t\ttime:   $torrents{$key}{ul_time}\n",
+			"\t\tsize:   $torrents{$key}{size}\n",
+			#"\t\tsource: $torrents{$key}{source}\n",
 		);
 		
 	}
@@ -142,7 +147,7 @@ if ($s{verbose} ge 1) {
 
 my $finish = time;
 
-print "$0 finished at " . localtime . ", took " . $finish - $start . "\n";
+print "$0 finished at " . localtime . ", took " . ($finish - $start) . "\n";
 
 exit;
 
