@@ -31,7 +31,7 @@ my %s = (
 
 my %torrents;
 
-my $start = localtime;
+my $start = time;
 print "$0 started at " . localtime . "\n" if $s{verbose} ge 1;
 
 ## find torrent files on each URL
@@ -82,8 +82,8 @@ for my $t (keys %torrents) {
 
 	last if $s{download_torrent} == 0;
 
-	print "  processing torrent link [$url]..\n" if $s{verbose} ge 2;
-	print "  ul_by: $uploader\n  ul_time: $time\n  size: $size\n" if $s{verbose} ge 1;
+	print "  processing torrent link [$url]..\n" if $s{verbose} ge 1;
+	print "  ul_by: $uploader\n  ul_time: $time\n  size: $size\n" if $s{verbose} ge 2;
 
 	if ($s{allow_yesterday}) {
 		next unless $torrents{$t}{ul_time} =~ /Today|Y-day/i;
@@ -129,7 +129,7 @@ if ($s{verbose} ge 1) {
 	}
 }
 
-my $finish = localtime;
+my $finish = time;
 
 print "$0 finished at " . localtime . ", took " . $finish - $start . "\n";
 
