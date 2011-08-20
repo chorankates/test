@@ -22,7 +22,7 @@ my %s = (
 	],
 
     download_torrent => 1, # 1 downloads files from known ul-ers, 2 downloads from anyone
-	allow_yesterday  => 1, # matches 'Today' or 'Y-day'
+	allow_yesterday  => 0, # matches 'Today' or 'Y-day'
 
 	browser_agent => "Mozilla/5.0 (Windows; U; Windows NT 5.2; en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6",
 
@@ -81,12 +81,17 @@ for my $t (keys %torrents) {
 
 	if ($s{allow_yesterday}) {
 		next unless $torrents{$t}{ul_time} =~ /Today|Y-day/i;
+		print "   torrent [$fname] is from yesterday\n" if $torrents{$t}{ul_time} =~ /Y-day/i and $s{verbose} ge 2;
 	} else {
 		next unless $torrents{$t}{ul_time} =~ /Today/i;
+		print "    torrent [$fname] is from today\n" if $s{verbose} ge 2;
 	}
 
 	unless ($s{download_torrent} == 2) { 
-	    next unless @{$s{known_uploaders}} ~~ /$uploader/;
+		unless (@{$s{known_uploaders}} ~~ $torrents{$t}{ul_by}) { 
+			print "  skipping download of torrent [$fname] because ul_by [$torrents{$t}{ul_by}] is not a known uploader\n" if $s{verbose} ge 2;
+			next;
+		}
 	}
 
 	print "  downloading torrent [$url]..\n" if $s{verbose} ge 1;
