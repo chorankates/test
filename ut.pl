@@ -5,6 +5,7 @@ use strict;
 use warnings;
 
 use Cwd;
+use File::Basename;
 use LWP::UserAgent;
 
 my %s = (
@@ -68,7 +69,7 @@ for my $url (@{$s{base_url}}) {
 
 }
 
-print "found " . scalar keys (%torrents) . " torrents\n" if $s{verbose} ge 1;
+print " found " . scalar keys (%torrents) . " torrents\n" if $s{verbose} ge 1;
 
 ## download torrent files
 for my $t (keys %torrents) {
@@ -109,7 +110,7 @@ for my $t (keys %torrents) {
 	print "\tdone: $dl_results\n" if $s{verbose} ge 2;
 }
 
-if ($s{verbose} ge 2) { 
+if ($s{verbose} ge 1) { 
 	print "\%torrents:\n";
 
 	for my $key (sort keys %torrents) { 
