@@ -92,10 +92,16 @@ for my $t (keys %torrents) {
 	print "  ul_by: $uploader\n  ul_time: $time\n  size: $size\n" if $s{verbose} ge 2;
 
 	if ($s{allow_yesterday}) {
-		next unless $torrents{$t}{ul_time} =~ /Today|Y-day/i;
+		unless ($torrents{$t}{ul_time} =~ /Today|Y-day/i) {
+	        print "   skipping torrent [$fname], not ul [Today|Y-day]\n" if $s{verbose} ge 2;
+			next;
+		}
 		print "   torrent [$fname] is from yesterday\n" if $torrents{$t}{ul_time} =~ /Y-day/i and $s{verbose} ge 2;
 	} else {
-		next unless $torrents{$t}{ul_time} =~ /Today/i;
+		unless ($torrents{$t}{ul_time} =~ /Today/i) {
+			print "    skipping torrent [$fname], not ul [Today]\n" if $s{verbose} ge 2;
+			next;
+		}
 		print "    torrent [$fname] is from today\n" if $s{verbose} ge 2;
 	}
 
@@ -104,9 +110,8 @@ for my $t (keys %torrents) {
 			print "  skipping download of torrent [$fname] because ul_by [$torrents{$t}{ul_by}] is not a known uploader\n" if $s{verbose} ge 2;
 			next;
 		}
+		print "  download torrent [$url]..\n" if $s{verbose} ge 1;
 	}
-
-	print "  downloading torrent [$url]..\n" if $s{verbose} ge 1;
 
 	my $dl_results = get_file($url, $fname);
        $dl_results = ($dl_results) ? 'success' : 'failure';
