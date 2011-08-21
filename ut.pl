@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-## adedToday.pl - looks for torrent files uploaded Today
+## ut.pl - looks for torrent files uploaded Today
 
 use strict;
 use warnings;
@@ -23,7 +23,12 @@ my (%f, %s); # flags, settings
 	known_uploaders => [
     	'eztv',
 		'VTV',
+		'TVTeam',
 	],
+
+	ignored_regex => [
+    	'(?i).*WWE.*',
+	], # will check the torrent file name against these regexes and skip if matched
 
 	check_archive => 1, # will look in archive directory for $fname, and not download if -f
 	archive       => '/home/conor/dl/_torrent/src/',
@@ -128,6 +133,11 @@ for my $t (keys %torrents) {
 			next;
 		}
 
+		if (is_ignored($fname)) { 
+            print "  skipping download of torrent [$fname] because it matches an entry in the ignore list\n" if $s{verbose} ge 1;
+			next;
+		}
+		
 		print "  downloading torrent [$url]..\n" if $s{verbose} ge 1;
 	}
 
@@ -190,4 +200,21 @@ sub already_downloaded {
 	my $results = (-f File::Spec->catfile($s{archive}, $file)) ? 1 : 0;
 
 	return $results;
+	
+}
+
+sub is_ignored {
+	# is_ignored($filename) - returns 0|1 for no|yes
+	my $file    = shift;
+	my $results = 0;
+
+	## this is just the wrong way to do this.. make it better
+	for my $regex (@{$s{ignored_regex}}) {
+    	if ($file =~ /$regex/) { 
+        	$results = 1;
+			last;
+		}
+	}
+
+    return $results;
 }
