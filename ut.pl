@@ -51,8 +51,14 @@ for my $url (@{$s{base_url}}) {
 	my ($worker, $response);
 	$worker = LWP::UserAgent->new();
     $worker->agent($s{browser_agent}); # liar
+	$worker->timeout(10); # fail fast
 
 	$response = $worker->get($url);
+
+	unless ($response->is_success) {
+		print "  failed to get URL: " . $response->status_line . "\n" if $s{verbose} ge 1;
+		next;
+	}
 	
 	my @content = split("<tr>", $response->content);
 
