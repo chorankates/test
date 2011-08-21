@@ -1,9 +1,14 @@
+## options
+&parse_options("windowSize=15"); # default is 10
+&parse_options("dumpDepth=10");  # default is unlimited, this one is iffy
+
+
+## functions
 sub pf { 
-        # call with DB::pf(filename, \data) from within the debugger
-        use Data::Dumper;
-        unless ($_[0] and $_[1]) { print "pf(filename, \data)"; return; }
-	my $fh;
-	open ($fh, '>', $_[0]) or warn "unable to open '$_[0]: $!";
+	# call with DB::pf(filename, \data) from within the debugger
+ 	use Data::Dumper;
+	unless ($_[0] and $_[1]) { print "pf(filename, \data)"; return; }
+	open (my $fh, '>', $_[0]) or warn "unable to open '$_[0]: $!";
 	print $fh Dumper($_[1]);
 	close ($fh);
 	print "!! dumped \$_[1] to '$_[0]'\n";
