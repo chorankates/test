@@ -1,3 +1,11 @@
-required for github.
+scripts / configs here are mostly one-offs, but a lot of larger projects start off here.
 
-files in repository 'test' will be throwaway or one-offs
+gfight   - compare the number of search results for 2 terms (Google and other engines)
+hound    - configuration based monitor of TPB, supports downloading/starting -- ut.pl is a compliment (or maybe stopgap) for this
+id3sync  - reads id3v1 and id3v2 tags and compares/merges them
+reusable - (mostly) older code for repetitive tasks, useful examples of implementation
+
+depends.pl    - looks through a directory of scripts and generates a list of CPAN dependencies
+downloader.pl - quick and dirty wget/curl replacement
+mock_cvs.pl   - bolt-on to Dropbox allowing synching of multiple directories
+ut.pl         - looks for torrents uploaded today and downloads them based on configs
