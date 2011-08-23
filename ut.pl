@@ -188,9 +188,8 @@ sub get_file {
 
 	my $response = $worker->get($url, ':content_file' => $file);
 
-    ## could probably key off $worker->is_success instead
-
-	$results = (-f $file) ? 0 : 1;
+	#$results = (-f $file) ? 0 : 1;
+	$results = ($response->is_success) ? 1 : 0;
 }
 
 sub already_downloaded {
