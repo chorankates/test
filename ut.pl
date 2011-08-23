@@ -179,7 +179,7 @@ exit;
 
 
 sub get_file {
-	# get_file($url, $fname) - returns 0|1 for success|failure
+	# get_file($url, $fname) - returns 1|0 for success|failure
 	my ($url, $file) = @_;
     my $results = 1;
 
