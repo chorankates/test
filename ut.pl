@@ -46,7 +46,7 @@ $s{$_} = $f{$_} foreach (keys %f);
 my %torrents;
 
 my $start = time;
-print "$0 started at " . localtime . "\n" if $s{verbose} ge 1;
+print "$0 started at " . localtime() . "\n" if $s{verbose} ge 1;
 
 ## find torrent files on each URL
 my $i = 0;
@@ -173,7 +173,7 @@ if ($s{verbose} ge 1) {
 
 my $finish = time;
 
-print "$0 finished at " . localtime . ", took " . ($finish - $start) . "\n";
+print "$0 finished at " . localtime() . ", took " . ($finish - $start) . "\n";
 
 exit;
 
