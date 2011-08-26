@@ -103,7 +103,7 @@ for my $t (keys %torrents) {
 
 	last if $s{download_torrent} == 0;
 
-	print "  processing torrent link [$fname]..\n" if $s{verbose} ge 1;
+	print "  processing torrent link [$fname]..\n" if $s{verbose} ge 2;
 	print "    ul_by: $uploader\t ul_time: $time\t size: $size\n" if $s{verbose} ge 2;
 
 	if ($s{allow_yesterday}) {
@@ -159,7 +159,7 @@ if ($s{verbose} ge 1) {
 		# keys are numeric, so keeping this order will list most popular -> least popular
     	print(
 			"\t$key\n",
-			#"\t\turl:        $torrents{$key}{url}\n",
+			"\t\turl:        $torrents{$key}{url}\n",
 			"\t\tdownloaded: $torrents{$key}{downloaded}\n",
 			"\t\tfname:      " . basename($torrents{$key}{url}) . "\n",
 			"\t\tul_by:      $torrents{$key}{ul_by}\n",
