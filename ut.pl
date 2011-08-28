@@ -1,6 +1,10 @@
 #!/usr/bin/perl
 ## ut.pl - looks for torrent files uploaded Today
 
+# TODO
+## rework the display of contents of %torrents
+## add the number of seeders/leechers to the %torrents hash 
+
 use strict;
 use warnings;
 
