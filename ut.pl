@@ -170,8 +170,10 @@ if ($s{verbose} ge 1) {
 			"\t\ttime:       $torrents{$key}{ul_time}\n",
 			"\t\tsize:       $torrents{$key}{size}\n",
 			#"\t\tsource:     $torrents{$key}{source}\n",
-		);
-		
+		) if 0;
+
+		print("  $key ($torrents{$key}{downloaded}) ul: $torrents{$key}{ul_by}, time: $torrents{$key}{ul_time}, size: $torrents{$key}{size}, url: $torrents{$key}{url}\n");
+
 	}
 }
 
