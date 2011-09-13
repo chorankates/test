@@ -157,7 +157,7 @@ for my $t (keys %torrents) {
 if ($s{verbose} ge 1) { 
 	print "\%torrents:\n";
 
-	for my $key (sort keys { $torrents{$a}{downloaded} <=> $torrents{$b}{downloaded} } %torrents) { 
+	for my $key (sort { $torrents{$a}{downloaded} <=> $torrents{$b}{downloaded} } keys %torrents) { 
 		next unless exists $torrents{$key}{downloaded} or $s{verbose} ge 3;
 
 		# keys are numeric, so keeping this order will list most popular -> least popular
