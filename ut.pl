@@ -105,6 +105,8 @@ for my $t (keys %torrents) {
 
 	my $fname    = basename($url);
 
+	$torrents{$t}{downloaded} = "pending";
+
 	last if $s{download_torrent} == 0;
 
 	print "  processing torrent link [$fname]..\n" if $s{verbose} ge 2;
@@ -157,8 +159,8 @@ for my $t (keys %torrents) {
 if ($s{verbose} ge 1) { 
 	print "\%torrents:\n";
 
-	for my $key (sort { $torrents{$a}{downloaded} <=> $torrents{$b}{downloaded} } keys %torrents) { 
-		next unless exists $torrents{$key}{downloaded} or $s{verbose} ge 3;
+	for my $key (sort { $torrents{$a}{downloaded} cmp $torrents{$b}{downloaded} } keys %torrents) { 
+		next unless $torrents{$key}{downloaded} =~ /success|failure|skipped/i or $s{verbose} ge 3;
 
 		# keys are numeric, so keeping this order will list most popular -> least popular
     	print(
