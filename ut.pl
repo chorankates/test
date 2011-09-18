@@ -136,11 +136,13 @@ for my $t (keys %torrents) {
 
 		if (already_downloaded($fname)) { 
 			print "  skipping download of torrent [$fname] because it already exists in [$s{archive}]\n" if $s{verbose} ge 2;
+			$torrents{$t}{downloaded} = 'already_downloaded';
 			next;
 		}
 
 		if (is_ignored($fname)) { 
             print "  skipping download of torrent [$fname] because it matches an entry in the ignore list\n" if $s{verbose} ge 1;
+			$torrents{$t}{downloaded} = 'ignored';
 			next;
 		}
 		
