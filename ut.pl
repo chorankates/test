@@ -162,7 +162,7 @@ if ($s{verbose} ge 1) {
 	print "\%torrents:\n";
 
 	for my $key (sort { $torrents{$a}{downloaded} cmp $torrents{$b}{downloaded} } keys %torrents) { 
-		next unless $torrents{$key}{downloaded} =~ /success|failure|skipped/i or $s{verbose} ge 3;
+		next unless $torrents{$key}{downloaded} =~ /success|failure|skipped|already_downloaded|ignored/i or $s{verbose} ge 3;
 
 		# keys are numeric, so keeping this order will list most popular -> least popular
     	print(
