@@ -2,10 +2,6 @@
 ## ut.pl - looks for torrent files uploaded Today
 
 # TODO
-## add the number of seeders/leechers to the %torrents hash 
-## fix sort order on torrent status output
-## add an interactive mode that prompts on each potential download (except ones explicitly ignored)
-
 
 use strict;
 use warnings;
@@ -44,6 +40,7 @@ my (%f, %s); # flags, settings
 
 	browser_agent => "Mozilla/5.0 (Windows; U; Windows NT 5.2; en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6",
 
+	interactive   => 0, # if true, will prompt on all non-ignored_regex torrents
 );
 
 GetOptions(\%f, "verbose:i", "download_torrent:i", "allow_yesterday:i", "help");
@@ -65,7 +62,7 @@ for my $url (@{$s{base_url}}) {
 	$worker->timeout(10); # fail fast
 
 	$response = $worker->get($url);
-
+                           
 	unless ($response->is_success) {
 		print "  failed to get URL: " . $response->status_line . "\n" if $s{verbose} ge 1;
 		next;
@@ -82,6 +79,10 @@ for my $url (@{$s{base_url}}) {
 			$torrents{$i}{ul_time} = $1 if $line =~ /Uploaded\s(.*?), Size\s(.*?),/;
 			$torrents{$i}{size}    = $2 if defined $2;
 			$torrents{$i}{src}     = $url;
+
+			my @sources = $line =~ /<td\salign=\"right\">(\d+)<\/td>/g;
+			$torrents{$i}{seeders}  = $sources[0];
+			$torrents{$i}{leechers} = $sources[1];
 
 			#ocd
 			$torrents{$i}{url}     =~ s/"//g;
@@ -114,43 +115,66 @@ for my $t (keys %torrents) {
 	print "  processing torrent link [$fname]..\n" if $s{verbose} ge 2;
 	print "    ul_by: $uploader\t ul_time: $time\t size: $size\n" if $s{verbose} ge 2;
 
-	if ($s{allow_yesterday}) {
-		unless ($torrents{$t}{ul_time} =~ /Today|Y-day/i) {
-	        print "   skipping torrent [$fname], not ul [Today|Y-day]\n" if $s{verbose} ge 2;
-			next;
+	unless ($s{interactive}) {
+		# automated mode
+		if ($s{allow_yesterday}) {
+			unless ($torrents{$t}{ul_time} =~ /Today|Y-day/i) {
+	        	print "   skipping torrent [$fname], not ul [Today|Y-day]\n" if $s{verbose} ge 2;
+				next;
+			}
+	   	 print "   torrent [$fname] is from yesterday\n" if $torrents{$t}{ul_time} =~ /Y-day/i and $s{verbose} ge 2;
+		} else {
+   		 	unless ($torrents{$t}{ul_time} =~ /Today/i) {
+				print "    skipping torrent [$fname], not ul [Today]\n" if $s{verbose} ge 2;
+	   		 	next;
+			}
+			print "    torrent [$fname] is from today\n" if $s{verbose} ge 2;
 		}
-		print "   torrent [$fname] is from yesterday\n" if $torrents{$t}{ul_time} =~ /Y-day/i and $s{verbose} ge 2;
+
+		unless ($s{download_torrent} == 2) { 
+   		 	print "DBGZ" if 0;
+			unless (@{$s{known_uploaders}} ~~ /$torrents{$t}{ul_by}/) { 
+				print "  skipping download of torrent [$fname] because ul_by [$torrents{$t}{ul_by}] is not a known uploader\n" if $s{verbose} ge 2;
+				$torrents{$t}{downloaded} = 'skipped';
+				next;
+			}		
+
+			if (already_downloaded($fname)) { 
+				print "  skipping download of torrent [$fname] because it already exists in [$s{archive}]\n" if $s{verbose} ge 2;
+				$torrents{$t}{downloaded} = 'already_downloaded';
+				next;
+			}
+
+			if (is_ignored($fname)) { 
+    	        print "  skipping download of torrent [$fname] because it matches an entry in the ignore list\n" if $s{verbose} ge 1;
+				$torrents{$t}{downloaded} = 'ignored';
+				next;
+			}
+		
+			print "  downloading torrent [$url]..\n" if $s{verbose} ge 1;
+		}
 	} else {
-		unless ($torrents{$t}{ul_time} =~ /Today/i) {
-			print "    skipping torrent [$fname], not ul [Today]\n" if $s{verbose} ge 2;
-			next;
-		}
-		print "    torrent [$fname] is from today\n" if $s{verbose} ge 2;
-	}
+    	# interactive mode
 
-	unless ($s{download_torrent} == 2) { 
-		print "DBGZ" if 0;
-		unless (@{$s{known_uploaders}} ~~ /$torrents{$t}{ul_by}/) { 
-			print "  skipping download of torrent [$fname] because ul_by [$torrents{$t}{ul_by}] is not a known uploader\n" if $s{verbose} ge 2;
-			$torrents{$t}{downloaded} = 'skipped';
-			next;
-		}		
-
-		if (already_downloaded($fname)) { 
-			print "  skipping download of torrent [$fname] because it already exists in [$s{archive}]\n" if $s{verbose} ge 2;
-			$torrents{$t}{downloaded} = 'already_downloaded';
-			next;
-		}
-
-		if (is_ignored($fname)) { 
-            print "  skipping download of torrent [$fname] because it matches an entry in the ignore list\n" if $s{verbose} ge 1;
+		if (is_ignored($fname)) {
+			print "  skipping download of torrent [$fname] because it matches an entry in the ignore list\n" if $s{verbose} ge 1;
 			$torrents{$t}{downloaded} = 'ignored';
 			next;
 		}
-		
-		print "  downloading torrent [$url]..\n" if $s{verbose} ge 1;
-	}
 
+		print_torrent_info($torrents{$t});
+		print "download? [y/n] ";
+		chomp(my $response = <STDIN>);
+
+        if ($response =~ /y/i) {
+            print "  downloading torrent [$url]..\n" if $s{verbose} ge 1;
+		} else {
+			print "  skipping download of torrent [$fname] by user interaction\n" if $s{verbose} ge 1;
+			$torrents{$t}{downloaded} = 'skipped';
+			next;
+		}
+
+	}
 
 	my $dl_results = get_file($url, $fname);
        $dl_results = ($dl_results) ? 'success' : 'failure';
@@ -178,7 +202,8 @@ if ($s{verbose} ge 1) {
 			#"\t\tsource:     $torrents{$key}{source}\n",
 		) if 0;
 
-		print("  $key ($torrents{$key}{downloaded}) ul: $torrents{$key}{ul_by}, time: $torrents{$key}{ul_time}, size: $torrents{$key}{size}, url: $torrents{$key}{url}\n");
+		#print("  $key ($torrents{$key}{downloaded}) ul: $torrents{$key}{ul_by}, time: $torrents{$key}{ul_time}, size: $torrents{$key}{size}, url: $torrents{$key}{url}\n");
+		print ("  $key " . print_torrent_info($torrents{$key}));
 
 	}
 }
@@ -189,6 +214,15 @@ print "$0 finished at " . localtime() . ", took " . ($finish - $start) . "\n";
 
 exit;
 
+sub print_torrent_info {
+	# print_torrent_info(\%hash) - uniform printing for torrent information
+    # expected pass: print_torrent_info($torrents{$n}); 
+    my $h = shift;
+
+	print("($h->{downloaded}) ul: $h->{ul_by}, time: $h->{ul_time}, size: $h->{ul_size}, s/l: $h->{seeders} /  $h->{leechers}, url: $h->{url}\n");
+
+	return;
+}
 
 sub get_file {
 	# get_file($url, $fname) - returns 1|0 for success|failure
