@@ -2,8 +2,10 @@
 ## ut.pl - looks for torrent files uploaded Today
 
 # TODO
-## rework the display of contents of %torrents
 ## add the number of seeders/leechers to the %torrents hash 
+## fix sort order on torrent status output
+## add an interactive mode that prompts on each potential download (except ones explicitly ignored)
+
 
 use strict;
 use warnings;
