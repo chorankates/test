@@ -43,7 +43,7 @@ my (%f, %s); # flags, settings
 	interactive   => 0, # if true, will prompt on all non-ignored_regex torrents
 );
 
-GetOptions(\%f, "verbose:i", "download_torrent:i", "allow_yesterday:i", "help");
+GetOptions(\%f, "verbose:i", "download_torrent:i", "allow_yesterday:i", "help", "interactive:i");
 $s{$_} = $f{$_} foreach (keys %f);
 
 my %torrents;
